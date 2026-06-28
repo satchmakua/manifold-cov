@@ -64,7 +64,33 @@ class BoundedRetryAgent:
         return {"answer": None, "error": "search unavailable after retries"}
 
 
-AGENTS = {a.id: a for a in (EchoAgent(), RetryForeverAgent(), BoundedRetryAgent())}
+# Unseeded RNG — this agent's choices are NOT controlled by Manifold's seed, exactly
+# like a real LLM agent. The environment is still deterministic per seed; the agent is
+# not. Run it with `--repeats K` to surface the flakiness (the pass^k signal, ADR-0002).
+_FLAKY_RNG = random.Random()
+
+
+class FlakyRetryAgent:
+    """Models LLM nondeterminism: on a tool error it *sometimes* gives up and sometimes
+    retries forever. The same seed therefore passes on some repeats and fails on others —
+    a bug no single run reliably reveals, but Manifold flags as a flaky seed."""
+
+    id = "toy.flaky_retry"
+
+    def run(self, task: Any, env: ToolEnv, budget: Budgets) -> Any:
+        while True:
+            try:
+                return {"answer": env.call("search", query=str(task))}
+            except ToolError:
+                env.state("retrying")
+                if _FLAKY_RNG.random() < 0.2:  # nondeterministic: usually retry, sometimes give up
+                    return {"answer": None, "error": "gave up"}
+
+
+AGENTS = {
+    a.id: a
+    for a in (EchoAgent(), RetryForeverAgent(), BoundedRetryAgent(), FlakyRetryAgent())
+}
 
 _TASKS = ["weather in Paris", "stock price AAPL", "who won the 2018 final"]
 

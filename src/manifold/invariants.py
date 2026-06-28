@@ -67,4 +67,5 @@ def no_infinite_retry(max_consecutive: int = 3) -> Invariant:
             )
         return None
 
+    check.__name__ = "no_infinite_retry"
     return check

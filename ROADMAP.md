@@ -27,26 +27,32 @@ Maps directly to DESIGN.md §8.
 
 ## Phase 1 — The novel core
 
-- [ ] **M1 — Coverage model + report.** *(credibility milestone)* The `CoverageModel`
+- [x] **M1 — Coverage model + report.** *(credibility milestone)* The `CoverageModel`
   primitives (coverpoints + bins, a transition FSM over the tool-call sequence,
   crosses) in `model.py`; `evaluate(trace, model) -> CoverageDB` with `merge`/`pct`/
   `holes` in `coverage.py`; a starter library of generic agent coverpoints; a `rich`
-  terminal coverage report and a single static HTML heatmap (`report.py`, jinja2). A
-  `manifold cover <spec.py>` command lists the declared model. Wire coverage into
-  `manifold run` so a sweep prints coverage % + holes alongside failures.
+  terminal coverage report and a single static HTML heatmap (`report.py`, **stdlib —
+  no jinja2 dep**). A `manifold cover <spec.py>` command lists the declared model;
+  `examples/spec_example.py` is the worked spec. Coverage wired into `manifold run`.
   **Test:** `manifold run examples/toy_agents.py --agent toy.retry_forever --scenarios 50
   --html report.html` → prints a coverage table with hit % and named holes; `report.html`
   opens to a heatmap; `manifold cover examples/spec_example.py` lists the coverpoints.
+  _(shipped 2026-06-28)_
 
 ## Phase 2 — Generate and close the loop
 
-- [ ] **M2 — Constrained-random generator + fault injection.** `ScenarioSpace` + the
-  pure seeded `sample(space, seed)` in `generate.py` (replacing hand-built
-  `make_scenario`); the full fault menu (error/timeout/garbage/latency); K
-  **repeats-per-seed** with per-seed flakiness reporting.
-  **Test:** `manifold run … --scenarios 500 --seed 7 --repeats 3` → sweeps generated
-  scenarios, aggregates coverage, and reports any flaky (pass-some/fail-some) seeds;
-  re-running the same `--seed` reproduces the same scenarios.
+- [x] **M2 — Constrained-random generator + fault injection.** `ScenarioSpace` + `ToolSpec`
+  + the pure seeded `sample(space, seed)` in `generate.py` (the canonical stimulus path;
+  hand-built `make_scenario` kept as the zero-spec fallback); the full fault menu
+  (error/timeout/garbage/latency, persistent + transient); the sweep loop extracted to
+  `closure.py` with K **repeats-per-seed** and per-seed flakiness (the `pass^k` signal).
+  A `toy.flaky_retry` agent (unseeded internal RNG) demonstrates it. `examples/spec_example.py`
+  now exposes `SPACE`.
+  **Test:** `manifold run examples/toy_agents.py --spec examples/spec_example.py
+  --agent toy.retry_forever --scenarios 500 --seed 7` → coverage jumps to ~47% (the
+  generator closes the M1 `search:err->search:ok` recovery hole and fills `fault_seen`
+  to 5/5); `--agent toy.flaky_retry --repeats 3` → lists flaky seeds (pass X/3); the same
+  `--seed` reproduces the same scenarios. _(shipped 2026-06-28)_
 
 - [ ] **M3 — Coverage-directed generation + the Claude demo.** Hole-biased sampling in
   `closure.py` (`--coverage-directed`); the real Claude-backed example agent

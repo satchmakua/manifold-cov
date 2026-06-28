@@ -67,7 +67,7 @@ Pinned to current stable as of **2026-06-28**.
 | Data model | **pydantic v2** | The trace/coverage/scenario schemas *are* the product — pydantic v2 gives typed, validated, JSON(L)-serializable models with fast (de)serialization for replay. |
 | CLI | **typer** (on click) | Declarative typed commands (`run`, `repro`, `report`, `cover`), good help output, minimal boilerplate. |
 | Terminal report | **rich** | Coverage tables, heatmap cells, progress bars, ranked-failure panels — the demo's terminal money shot. |
-| HTML report | **Jinja2** → single self-contained `.html` | One static file with an inline SVG/CSS heatmap; no server, opens in a browser, screenshot-ready for the portfolio. |
+| HTML report | **stdlib string templating** → single self-contained `.html` | One static file with an inline CSS heatmap; no template-engine dependency, no server, opens in a browser, screenshot-ready for the portfolio. |
 | Testing | **pytest** | Manifold is a testing tool; its own suite must be exemplary. Includes a recorded-trace fixture so the Claude demo is tested offline. |
 | Real-LLM example | **anthropic** SDK (tool-use loop), `claude-haiku-4-5` | The v1 Claude example is built directly on the `anthropic` tool-use loop for full control over the agent loop and cost (`claude-haiku-4-5`, $1/$5 per MTok). Gated behind `ANTHROPIC_API_KEY`. |
 | Real-framework adapter (stretch) | **claude-agent-sdk** (MIT, 3.10+) | M4 adapter targets Anthropic's higher-level Agent SDK — "chip-grade verification for Claude agents." Verified on PyPI 2026-06-28. |
@@ -380,7 +380,7 @@ report(db, failures)
 
 ### 6.7 Reporting (`report.py`)
 
-`rich` for the terminal: a coverage table (group, hit/total, %), a compact heatmap (hit = filled cell, hole = empty), and a ranked-failures panel (invariant, seed, one-line detail). `Jinja2` renders the same data to a single self-contained `report.html` with an inline-SVG heatmap — the screenshot artifact for the portfolio.
+`rich` for the terminal: a coverage table (group, hit/total, %), a compact heatmap (hit = filled cell, hole = empty), and a ranked-failures panel (invariant, seed, one-line detail). A small **stdlib HTML writer** (no template engine) renders the same data to a single self-contained `report.html` with an inline-CSS heatmap — the screenshot artifact for the portfolio.
 
 ### 6.8 CLI surface (`cli.py`)
 
@@ -463,7 +463,7 @@ Ship publicly at **M1–M3**.
 - Hypothesis (property-based testing; strategies + shrinking + failing-example DB) — design reference for the generator and the M4 shrinker; **not** a dependency (MPL-2.0). Verified 6.x on 2026-06-28.
 
 **Libraries / SDKs (verified 2026-06-28)**
-- pydantic v2, typer, rich, Jinja2, pytest, ruff, uv — runtime/tooling, MIT/BSD/Apache-2.0.
+- pydantic v2, typer, rich, pytest, ruff, mypy — runtime/tooling, MIT/BSD/Apache-2.0. (HTML report uses stdlib templating — no Jinja2 dependency.)
 - `anthropic` SDK (tool-use loop) with `claude-haiku-4-5` — the v1 Claude example.
 - `claude-agent-sdk` (MIT, Python 3.10+, released 2026-06-24) — the M4 stretch adapter target.
 

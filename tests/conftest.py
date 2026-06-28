@@ -10,21 +10,27 @@ from types import ModuleType
 
 import pytest
 
-EXAMPLES = Path(__file__).resolve().parents[1] / "examples" / "toy_agents.py"
+EXAMPLES_DIR = Path(__file__).resolve().parents[1] / "examples"
 
 
-def _load_toy() -> ModuleType:
-    spec = importlib.util.spec_from_file_location("toy_agents", EXAMPLES)
+def _load(name: str) -> ModuleType:
+    path = EXAMPLES_DIR / f"{name}.py"
+    spec = importlib.util.spec_from_file_location(name, path)
     assert spec is not None and spec.loader is not None
     mod = importlib.util.module_from_spec(spec)
-    sys.modules["toy_agents"] = mod
+    sys.modules[name] = mod
     spec.loader.exec_module(mod)
     return mod
 
 
 @pytest.fixture(scope="session")
 def toy() -> ModuleType:
-    return _load_toy()
+    return _load("toy_agents")
+
+
+@pytest.fixture(scope="session")
+def spec() -> ModuleType:
+    return _load("spec_example")
 
 
 @pytest.fixture(scope="session")
