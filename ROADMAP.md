@@ -54,16 +54,18 @@ Maps directly to DESIGN.md §8.
   to 5/5); `--agent toy.flaky_retry --repeats 3` → lists flaky seeds (pass X/3); the same
   `--seed` reproduces the same scenarios. _(shipped 2026-06-28)_
 
-- [ ] **M3 — Coverage-directed generation + the Claude demo.** Hole-biased sampling in
-  `closure.py` (`--coverage-directed`); the real Claude-backed example agent
-  (`anthropic` tool-use loop, `claude-haiku-4-5`, gated behind `ANTHROPIC_API_KEY`,
-  with a committed recorded trace for offline runs) carrying a real reliability bug
-  that Manifold finds, reports at ~80% coverage, and hands back as a seed + heatmap +
-  one-line repro.
-  **Test:** `manifold run examples/claude_agent.py --spec examples/spec_example.py
-  --scenarios 500 --coverage-directed` → reaches the coverage target in fewer scenarios
-  than `--random`, finds the planted bug, and prints the §7 demo output; the demo's
-  pytest runs offline from the recorded trace.
+- [x] **M3 — Coverage-directed generation + the Claude demo.** Coverage-direction via
+  **seed selection** in `closure.py` (`--coverage-directed`; keeps `sample` pure so seeds
+  stay reproducible — ADR-0004), verified to beat uniform random. The real Claude-backed
+  agent `examples/claude_agent.py` (`anthropic` tool-use loop, `claude-haiku-4-5`, lazy
+  import + injectable client, gated behind `ANTHROPIC_API_KEY`) that Manifold finds a
+  retry-to-budget bug in; a committed recorded trace (`examples/recorded/`) makes the demo
+  + test run offline with no key.
+  **Test (live):** `ANTHROPIC_API_KEY=... manifold run examples/claude_agent.py --spec
+  examples/spec_example.py --scenarios 10 --coverage-directed` → finds the bug, prints the
+  §7 output. **Test (offline, what CI runs):** `python examples/claude_agent.py` prints
+  PASS/FAIL on the scripted run; `pytest` flags the recorded trace and shows directed
+  beats random — all with no API call. _(shipped 2026-06-28)_
 
 ## Phase 3 — Depth (stretch)
 

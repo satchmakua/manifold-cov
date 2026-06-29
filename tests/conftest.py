@@ -34,6 +34,13 @@ def spec() -> ModuleType:
 
 
 @pytest.fixture(scope="session")
+def claude() -> ModuleType:
+    # Loading this at all proves the module imports with `anthropic` not installed
+    # (the live client is imported lazily); the offline demo/test never calls the API.
+    return _load("claude_agent")
+
+
+@pytest.fixture(scope="session")
 def error_seed(toy: ModuleType) -> int:
     """A seed whose scenario injects a persistent `search` outage."""
     for s in range(500):

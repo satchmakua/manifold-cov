@@ -133,6 +133,9 @@ def run(
     scenarios: int = typer.Option(10, "--scenarios", "-n", help="Number of seeds to sweep."),
     seed: int = typer.Option(0, "--seed", "-s", help="Base seed."),
     repeats: int = typer.Option(1, "--repeats", "-k", help="Runs per seed; >1 surfaces flakiness."),
+    coverage_directed: bool = typer.Option(
+        False, "--coverage-directed/--random", help="Bias generation toward coverage holes."
+    ),
     html: str | None = typer.Option(None, "--html", help="Write a static HTML coverage report."),
 ) -> None:
     """Sweep N seeded scenarios, measure coverage, and report holes + flaky seeds + failures."""
@@ -144,13 +147,16 @@ def run(
     build = _scenario_builder(spec_mod, mod)
 
     result = sweep(
-        ag, build, model, invariants, scenarios=scenarios, base_seed=seed, repeats=repeats
+        ag, build, model, invariants,
+        scenarios=scenarios, base_seed=seed, repeats=repeats,
+        coverage_directed=coverage_directed,
     )
     spec_arg = f" --spec {spec}" if spec else ""
 
     rep = f" x {repeats} repeats" if repeats > 1 else ""
+    mode = "coverage-directed" if coverage_directed else "random"
     console.print(
-        f"\n[bold]Manifold[/] · {scenarios} scenarios{rep} · random · agent=[cyan]{ag.id}[/]"
+        f"\n[bold]Manifold[/] · {scenarios} scenarios{rep} · {mode} · agent=[cyan]{ag.id}[/]"
     )
     console.print(coverage_table(result.db))
     fully = result.fully_passing()

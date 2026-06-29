@@ -34,7 +34,8 @@ __pycache__/
 .ruff_cache/
 .mypy_cache/
 
-# Manifold run artifacts (generated)
+# Manifold run artifacts (generated). Recorded-trace fixtures under
+# examples/recorded/ ARE committed (they make the Claude demo run offline).
 report.html
 runs/
-*.jsonl
+/*.jsonl

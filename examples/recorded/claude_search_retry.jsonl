@@ -1,0 +1,26 @@
+{"seed": 7, "scenario_id": "278ff109287f", "agent_id": "claude.search", "repeat": 0}
+{"kind":"tool_call","step":1,"tool":"search","args":{"query":"..."}}
+{"kind":"tool_result","step":1,"tool":"search","ok":false,"value":null,"fault":"error","latency_ms":0}
+{"kind":"tool_call","step":2,"tool":"search","args":{"query":"..."}}
+{"kind":"tool_result","step":2,"tool":"search","ok":false,"value":null,"fault":"error","latency_ms":0}
+{"kind":"tool_call","step":3,"tool":"search","args":{"query":"..."}}
+{"kind":"tool_result","step":3,"tool":"search","ok":false,"value":null,"fault":"error","latency_ms":0}
+{"kind":"tool_call","step":4,"tool":"search","args":{"query":"..."}}
+{"kind":"tool_result","step":4,"tool":"search","ok":false,"value":null,"fault":"error","latency_ms":0}
+{"kind":"tool_call","step":5,"tool":"search","args":{"query":"..."}}
+{"kind":"tool_result","step":5,"tool":"search","ok":false,"value":null,"fault":"error","latency_ms":0}
+{"kind":"tool_call","step":6,"tool":"search","args":{"query":"..."}}
+{"kind":"tool_result","step":6,"tool":"search","ok":false,"value":null,"fault":"error","latency_ms":0}
+{"kind":"tool_call","step":7,"tool":"search","args":{"query":"..."}}
+{"kind":"tool_result","step":7,"tool":"search","ok":false,"value":null,"fault":"error","latency_ms":0}
+{"kind":"tool_call","step":8,"tool":"search","args":{"query":"..."}}
+{"kind":"tool_result","step":8,"tool":"search","ok":false,"value":null,"fault":"error","latency_ms":0}
+{"kind":"tool_call","step":9,"tool":"search","args":{"query":"..."}}
+{"kind":"tool_result","step":9,"tool":"search","ok":false,"value":null,"fault":"error","latency_ms":0}
+{"kind":"tool_call","step":10,"tool":"search","args":{"query":"..."}}
+{"kind":"tool_result","step":10,"tool":"search","ok":false,"value":null,"fault":"error","latency_ms":0}
+{"kind":"tool_call","step":11,"tool":"search","args":{"query":"..."}}
+{"kind":"tool_result","step":11,"tool":"search","ok":false,"value":null,"fault":"error","latency_ms":0}
+{"kind":"tool_call","step":12,"tool":"search","args":{"query":"..."}}
+{"kind":"tool_result","step":12,"tool":"search","ok":false,"value":null,"fault":"error","latency_ms":0}
+{"kind":"terminal","step":12,"reason":"budget_steps","steps_used":12,"cost_used":12.0,"wall_ms":0}

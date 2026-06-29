@@ -15,12 +15,14 @@ are, the bugs found, and a one-line `manifold repro <seed>` for each.
 > coverage + falsification — it finds bugs and measures how much of the behavior space
 > you've covered.
 
-**Status:** **M2 shipped** — the trace + reproduction core runs, generates seeded
-constrained-random scenarios with fault injection, measures functional coverage of the
-agent's behavior space (static HTML heatmap), surfaces per-seed **flakiness** across
-repeats (the `pass^k` signal), and finds a planted retry-forever bug. See
-[ROADMAP.md](ROADMAP.md) for the plan.
-Next up: coverage-directed generation + the real Claude-backed demo (M3).
+**Status:** **M3 shipped — the v1 vertical slice runs end to end.** Manifold generates
+seeded constrained-random scenarios with fault injection, measures functional coverage of
+the behavior space (static HTML heatmap), biases generation toward holes
+(`--coverage-directed`, verified to beat uniform random), surfaces per-seed **flakiness**
+(the `pass^k` signal), and finds reliability bugs in both toy agents and a real
+**Claude-backed** agent — handing back the exact seed to reproduce each. See
+[ROADMAP.md](ROADMAP.md). Next: the M4 stretch (scenario
+shrinking, a `claude-agent-sdk` adapter).
 
 ---
 
@@ -60,11 +62,22 @@ manifold run examples/toy_agents.py --spec examples/spec_example.py \
     --agent toy.flaky_retry --scenarios 60 --repeats 3
 ```
 
+Add `--coverage-directed` to bias generation toward the holes (it reaches higher coverage
+in fewer scenarios than the default `--random`). And see Manifold find a retry-to-budget
+bug in a **real Claude-backed agent** — offline, no API key needed (it analyses a committed
+recorded trace):
+
+```bash
+python examples/claude_agent.py
+# Live (needs ANTHROPIC_API_KEY + pip install "manifold-cov[claude]"):
+#   manifold run examples/claude_agent.py --spec examples/spec_example.py --scenarios 10 --coverage-directed
+```
+
 ### Commands
 
 | Command | What it does |
 |---|---|
-| `manifold run <file> [--spec S] [--agent NAME] [--scenarios N] [--seed S] [--repeats K] [--html PATH]` | Sweep N seeded scenarios (×K repeats); report coverage % + holes, flaky seeds, and invariant failures with a repro for each. |
+| `manifold run <file> [--spec S] [--agent NAME] [--scenarios N] [--seed S] [--repeats K] [--coverage-directed] [--html PATH]` | Sweep N seeded scenarios (×K repeats); report coverage % + holes, flaky seeds, and invariant failures with a repro for each. |
 | `manifold repro <seed> <file> [--spec S] [--agent NAME]` | Re-run one scenario by seed; print its full trace + verdict. |
 | `manifold cover <spec_file>` | List the declared coverage model (coverpoints, FSM edges, crosses). |
 | `ruff check . && mypy && pytest` | Lint, typecheck (strict), and run the test suite. |
