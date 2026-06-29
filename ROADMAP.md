@@ -81,3 +81,31 @@ Maps directly to DESIGN.md §8.
 **North star:** point Manifold at an agent and one screen tells the whole story —
 coverage %, the holes, the bugs found, and a one-line `manifold repro <seed>` for each
 (DESIGN.md §7).
+
+---
+
+## Review-driven hardening — make it sparkle (added 2026-06-28)
+
+> Added after an external code review (captured in `../ai-docs/project_eval/`). The
+> methodology is the most *novel* in the family and M0–M3 ship — but the flagship
+> "directed beats random" lift is an unconvincing **~2 points** (42.6% vs 40.4%), the
+> "real Claude agent" demo currently runs on a **scripted stub** (the committed trace is
+> from `ScriptedClient`, not the live API), and the testing tool has the **lowest test
+> ratio** of the family. These items fix exactly that. **Standing rule:** a milestone is
+> checked only when it has produced **one real, captured, reproducible artifact**.
+
+**Definition of Done — the "Sparkle Bar"** (applies to every milestone):
+1. **Real artifact captured** — produced against a real agent, pinned at the top of the README with the exact reproduce command.
+2. **Flagship demo in one screen** — the coverage heatmap + a real bug with its repro.
+3. **Stress-tested** — and the testing tool itself should be the best-tested thing in the set.
+4. **Honest numbers** — a real margin, not a 2-point delta; an explicit "can't do" list.
+5. **Cold-clone reproducible** — pinned deps, fixed seeds, one `make demo`, CI runs the real-or-recorded path.
+6. **Polished** — no stray files, no unreachable declared coverpoints, README opens with the artifact.
+7. **Positioned** — one paragraph: who it's for, what it beats, why this not the obvious alternative.
+
+**Hardening items (Manifold-specific):**
+- [ ] **H1 — Make coverage-directed *decisively* win.** Strengthen the hole-bias to target **all** current holes (transition edges + crosses, not just `fault_seen`), and produce a **coverage-vs-scenarios curve**. *Accept:* on the example, `--coverage-directed` reaches **~90% coverage in ≤ 1/3 the scenarios** of `--random`, and the curve is in the README — a headline margin, not a 2-point delta.
+- [ ] **H2 — Find a real bug in a real agent.** Run `examples/claude_agent.py` against the **live** API once, find a genuine reliability bug, and commit the **real** trace (recorded for offline CI) + the heatmap screenshot — replacing the scripted-stub trace as the headline. *Accept:* a real-model trace is committed; the README shows the real bug + its one-line `manifold repro`.
+- [ ] **H3 — Off-the-shelf adapter (promote from M4).** Ship the `claude-agent-sdk` (or popular-framework) adapter so Manifold is proven on an agent the author **didn't** write. *Accept:* a third-party agent runs unmodified behind the adapter and is covered.
+- [ ] **H4 — No unreachable coverpoints.** Make latency faults optionally real (simulated clock / flagged sleep) so the `timeout` bin is reachable — or remove the bin honestly. *Accept:* every declared coverpoint is reachable on the example, or is documented as deliberately aspirational.
+- [ ] **H5 — Dogfood.** Raise Manifold's own test ratio to the family norm (~0.5 test-to-source). *Accept:* test ratio raised; ideally the suite is self-gated.
