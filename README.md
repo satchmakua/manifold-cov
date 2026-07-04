@@ -15,14 +15,36 @@ are, the bugs found, and a one-line `manifold repro <seed>` for each.
 > coverage + falsification — it finds bugs and measures how much of the behavior space
 > you've covered.
 
-**Status:** **M3 shipped — the v1 vertical slice runs end to end.** Manifold generates
+## The artifact — coverage-directed generation decisively beats random
+
+![Coverage vs scenarios: directed vs random](docs/coverage_curve.svg)
+
+On the multi-tool `research.pipeline` example (a 26-bin behavior space), biasing generation
+toward the coverage holes reaches **90% of achievable coverage at N=8 scenarios and *full*
+100% coverage at N=11; uniform random needs N=35 for 90% and N=217 for 100%** — roughly
+**4× fewer scenarios to 90% and ~20× fewer to full coverage** (at the default seed). Both
+modes reach 100% eventually — the example is fair; directed just **targets the behaviors it
+hasn't tested** (via input-derived projections) instead of waiting to stumble on them.
+Reproduce it in one command:
+
+```bash
+manifold curve examples/research_agent.py --agent research.pipeline --svg docs/coverage_curve.svg
+```
+
+That is the whole thesis in one picture: *targeting what you haven't tested finds the gaps
+faster than testing at random.*
+
+**Status:** **M0–M3 shipped + review-driven hardening (H0/H1/H4).** Manifold generates
 seeded constrained-random scenarios with fault injection, measures functional coverage of
-the behavior space (static HTML heatmap), biases generation toward holes
-(`--coverage-directed`, verified to beat uniform random), surfaces per-seed **flakiness**
-(the `pass^k` signal), and finds reliability bugs in both toy agents and a real
-**Claude-backed** agent — handing back the exact seed to reproduce each. See
-[ROADMAP.md](ROADMAP.md). Next: the M4 stretch (scenario
-shrinking, a `claude-agent-sdk` adapter).
+the behavior space (HTML heatmap), biases generation toward holes (`--coverage-directed`,
+**~4× fewer scenarios to 90% / ~16× to full coverage, median across seeds** — above),
+surfaces per-seed **flakiness** (the `pass^k` signal), and finds reliability bugs in toy
+agents and a Claude-backed agent — each with a one-line repro. Hardening done: the flagship
+command no longer crashes on a stock Windows console (H0); every declared coverpoint is
+reachable (H4); the directed win is a *targeting* win, not a truncation artifact (H1). See
+[ROADMAP.md](ROADMAP.md). **Honest gaps:** the Claude bug is
+caught against a scripted stand-in of the tool-use loop (a live-API run is one key away — the
+code is ready); scenario shrinking and an off-the-shelf `claude-agent-sdk` adapter remain.
 
 ---
 
@@ -79,8 +101,10 @@ python examples/claude_agent.py
 |---|---|
 | `manifold run <file> [--spec S] [--agent NAME] [--scenarios N] [--seed S] [--repeats K] [--coverage-directed] [--html PATH]` | Sweep N seeded scenarios (×K repeats); report coverage % + holes, flaky seeds, and invariant failures with a repro for each. |
 | `manifold repro <seed> <file> [--spec S] [--agent NAME]` | Re-run one scenario by seed; print its full trace + verdict. |
+| `manifold curve <file> [--spec S] [--max-scenarios N] [--svg PATH]` | Sweep both modes and chart coverage vs scenarios (directed vs random) — writes a self-contained SVG. |
 | `manifold cover <spec_file>` | List the declared coverage model (coverpoints, FSM edges, crosses). |
-| `ruff check . && mypy && pytest` | Lint, typecheck (strict), and run the test suite. |
+| `make demo` | Produce all the artifacts (heatmap + coverage curve + Claude bug) after `make check`. |
+| `ruff check . && mypy && pytest` | Lint, typecheck (strict), and run the test suite (`make check`). |
 
 A target module exposes `AGENTS: dict[str, Agent]` and `make_scenario(seed) -> Scenario`;
 a spec module exposes `MODEL: CoverageModel` and `INVARIANTS` — see
@@ -88,6 +112,26 @@ a spec module exposes `MODEL: CoverageModel` and `INVARIANTS` — see
 [`examples/spec_example.py`](examples/spec_example.py).
 
 ---
+
+## Honest limits (what it can't do)
+
+- **Coverage ≠ correctness.** It measures thoroughness, not proof — always read a coverage
+  number alongside the invariant failures. (By design; proof is a different tool's job.)
+- **It tests against a behavior model *you* declare.** A blind spot you didn't put in the
+  model is one Manifold can't see either.
+- **Coverage-directed's margin is seed-dependent and scales with the space.** Measured
+  **1.8×–5.1× fewer scenarios to 90% (median ~2.9×)** and **~16× to full coverage** across
+  base seeds (4× / 20× at the default seed). The effect is largest on a big input-derivable
+  space (the multi-tool `research` agent) and marginal on a tiny one (a single-tool agent) —
+  and it only steers toward coverpoints that declare a `project` hook; behaviour a coverpoint
+  can't predict from inputs, both modes reach only by sampling more.
+- **The Claude bug is caught against a *scripted stand-in* of the tool-use loop**, not a live
+  model. The `anthropic` loop is real and correct; a genuine live-model trace is one
+  `ANTHROPIC_API_KEY` away (`pip install "manifold-cov[claude]"` → the `manifold run
+  examples/claude_agent.py …` command above) — the code is ready and offline-tested.
+- **Off-the-shelf agents + scenario shrinking are still roadmap** (M4 / H3): an adapter for the
+  `claude-agent-sdk` and a delta-debug minimizer that reduces a failing scenario to its smallest
+  reproducer.
 
 ## Project docs
 

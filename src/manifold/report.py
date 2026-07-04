@@ -1,8 +1,8 @@
 """Reporting (DESIGN.md §6.7).
 
-A ``rich`` terminal coverage table for the CLI, and a single self-contained static
-HTML heatmap for the portfolio screenshot. The HTML is built with stdlib string
-templating (no template-engine dependency) — the heatmap is a simple grid of cells.
+A ``rich`` terminal coverage table for the CLI, a self-contained static HTML heatmap,
+and a self-contained SVG coverage-vs-scenarios curve — all built with stdlib string
+templating (no template-engine or plotting dependency).
 """
 
 from __future__ import annotations
@@ -115,3 +115,87 @@ def write_html(
         f"{''.join(sections)}{fail_table}</body></html>"
     )
     Path(path).write_text(doc, encoding="utf-8")
+
+
+def _first_reaching(traj: Sequence[float], target: float) -> int | None:
+    return next((i + 1 for i, p in enumerate(traj) if p >= target), None)
+
+
+def write_curve_svg(
+    directed: Sequence[float],
+    random_: Sequence[float],
+    path: str | Path,
+    *,
+    title: str = "Coverage vs scenarios — directed vs random",
+    target: float = 90.0,
+) -> None:
+    """A self-contained SVG line chart of the two coverage trajectories (no plotting dep)."""
+    n = max(len(directed), len(random_), 2)
+    lx, rx, ty, by = 64, 736, 48, 344
+    pw, ph = rx - lx, by - ty
+
+    def x(i: int) -> float:
+        return lx + (i / (n - 1)) * pw
+
+    def y(p: float) -> float:
+        return ty + (1 - p / 100) * ph
+
+    def polyline(traj: Sequence[float], color: str) -> str:
+        pts = " ".join(f"{x(i):.1f},{y(p):.1f}" for i, p in enumerate(traj))
+        return f"<polyline fill='none' stroke='{color}' stroke-width='2.5' points='{pts}'/>"
+
+    def txt(xx: float, yy: float, s: str, *, size: int = 11, fill: str = "#888",
+            anchor: str = "middle", weight: str = "normal") -> str:
+        w = f" font-weight='{weight}'" if weight != "normal" else ""
+        return (f"<text x='{xx:.1f}' y='{yy:.1f}' text-anchor='{anchor}' "
+                f"font-size='{size}'{w} fill='{fill}'>{s}</text>")
+
+    grid = []
+    for pct in (0, 25, 50, 75, 100):
+        yy = y(pct)
+        grid.append(f"<line x1='{lx}' y1='{yy:.1f}' x2='{rx}' y2='{yy:.1f}' stroke='#8883'/>")
+        grid.append(txt(lx - 8, yy + 4, f"{pct}%", anchor="end"))
+    for frac in (0, 0.25, 0.5, 0.75, 1.0):
+        i = round(frac * (n - 1))
+        grid.append(txt(x(i), by + 20, str(i + 1)))
+
+    target_line = (
+        f"<line x1='{lx}' y1='{y(target):.1f}' x2='{rx}' y2='{y(target):.1f}' "
+        f"stroke='#c05621' stroke-width='1' stroke-dasharray='5 4'/>"
+        + txt(rx, y(target) - 6, f"{target:.0f}% target", fill="#c05621", anchor="end")
+    )
+
+    markers = []
+    for traj, color, name in ((directed, "#1f9d55", "directed"), (random_, "#3b6fb0", "random")):
+        at = _first_reaching(traj, target)
+        if at is not None:
+            cx, cy = x(at - 1), y(traj[at - 1])
+            markers.append(
+                f"<circle cx='{cx:.1f}' cy='{cy:.1f}' r='4' fill='{color}'/>"
+                + txt(cx, cy - 9, f"{name} @ N={at}", fill=color)
+            )
+
+    legend = (
+        f"<rect x='{lx + 8}' y='{ty + 8}' width='12' height='12' fill='#1f9d55'/>"
+        + txt(lx + 26, ty + 18, "coverage-directed", size=12, fill="#333", anchor="start")
+        + f"<rect x='{lx + 8}' y='{ty + 28}' width='12' height='12' fill='#3b6fb0'/>"
+        + txt(lx + 26, ty + 38, "random", size=12, fill="#333", anchor="start")
+    )
+
+    header = (
+        "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 800 380' "
+        "font-family='system-ui, sans-serif'><rect width='800' height='380' fill='white'/>"
+    )
+    axes = (
+        f"<line x1='{lx}' y1='{ty}' x2='{lx}' y2='{by}' stroke='#444'/>"
+        f"<line x1='{lx}' y1='{by}' x2='{rx}' y2='{by}' stroke='#444'/>"
+    )
+    svg = (
+        header
+        + txt(400, 24, html.escape(title), size=15, fill="#222", weight="700")
+        + "".join(grid) + axes
+        + txt(400, 372, "scenarios run", size=12, fill="#555")
+        + target_line + polyline(random_, "#3b6fb0") + polyline(directed, "#1f9d55")
+        + "".join(markers) + legend + "</svg>"
+    )
+    Path(path).write_text(svg, encoding="utf-8")

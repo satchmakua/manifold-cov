@@ -41,6 +41,11 @@ def claude() -> ModuleType:
 
 
 @pytest.fixture(scope="session")
+def research() -> ModuleType:
+    return _load("research_agent")
+
+
+@pytest.fixture(scope="session")
 def error_seed(toy: ModuleType) -> int:
     """A seed whose scenario injects a persistent `search` outage."""
     for s in range(500):

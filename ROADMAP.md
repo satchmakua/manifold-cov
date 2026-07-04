@@ -104,8 +104,28 @@ coverage %, the holes, the bugs found, and a one-line `manifold repro <seed>` fo
 7. **Positioned** — one paragraph: who it's for, what it beats, why this not the obvious alternative.
 
 **Hardening items (Manifold-specific):**
-- [ ] **H1 — Make coverage-directed *decisively* win.** Strengthen the hole-bias to target **all** current holes (transition edges + crosses, not just `fault_seen`), and produce a **coverage-vs-scenarios curve**. *Accept:* on the example, `--coverage-directed` reaches **~90% coverage in ≤ 1/3 the scenarios** of `--random`, and the curve is in the README — a headline margin, not a 2-point delta.
-- [ ] **H2 — Find a real bug in a real agent.** Run `examples/claude_agent.py` against the **live** API once, find a genuine reliability bug, and commit the **real** trace (recorded for offline CI) + the heatmap screenshot — replacing the scripted-stub trace as the headline. *Accept:* a real-model trace is committed; the README shows the real bug + its one-line `manifold repro`.
-- [ ] **H3 — Off-the-shelf adapter (promote from M4).** Ship the `claude-agent-sdk` (or popular-framework) adapter so Manifold is proven on an agent the author **didn't** write. *Accept:* a third-party agent runs unmodified behind the adapter and is covered.
-- [ ] **H4 — No unreachable coverpoints.** Make latency faults optionally real (simulated clock / flagged sleep) so the `timeout` bin is reachable — or remove the bin honestly. *Accept:* every declared coverpoint is reachable on the example, or is documented as deliberately aspirational.
-- [ ] **H5 — Dogfood.** Raise Manifold's own test ratio to the family norm (~0.5 test-to-source). *Accept:* test ratio raised; ideally the suite is self-gated.
+- [x] **H0 — Fix the Windows crash.** `manifold`'s typer callback forces UTF-8 stdio, so the
+  flagship coverage table no longer `UnicodeEncodeError`s on a stock cp1252 console.
+  _(shipped 2026-07-03)_
+- [x] **H1 — Make coverage-directed *decisively* win.** The selector scores candidates by how many
+  unhit *reachable* bins they fill across **every projected coverpoint** — the input-derivable
+  `fault_by_tool` 12-cell space plus input-derived `project` hooks on `terminal_reason`/`n_tool_calls`
+  so directed genuinely *targets* the budget/latency behaviours (not coupon-collector luck). A
+  `manifold curve` command charts coverage-vs-scenarios to a self-contained SVG. *Accept met:* on
+  `research.pipeline`, directed reaches **90% at N=8 vs random N=35 (~4×) and full 100% at N=11 vs
+  random N=217 (~20×)** at the default seed; **both reach 100%** (fair example). Median across seeds
+  ~2.9× to 90%, ~16× to full. Curve in the README. _(shipped 2026-07-03; corrected after adversarial
+  self-review flagged a truncation-artifact overclaim.)_
+- [x] **H4 — No unreachable coverpoints.** A **simulated clock** (latency faults advance virtual
+  time) makes `timeout` reachable; small cost/step/wall budget choices make `budget_cost`/
+  `budget_steps`/`timeout` reachable; structurally-impossible bins are marked `ignore` (excluded
+  from the denominator, à la UVM ignore_bins). *Accept met:* a directed sweep of the research model
+  reaches **100%** — every declared bin is reachable (tested). _(shipped 2026-07-03)_
+- [ ] **H2 — Find a real bug in a real agent.** *Blocked on `ANTHROPIC_API_KEY` (unavailable in the
+  build env).* The code is ready: run `manifold run examples/claude_agent.py --spec … --coverage-directed`
+  live once, commit the real trace as the offline fixture (replacing `ScriptedClient`'s), and lead the
+  README with the real bug + heatmap. *Accept:* a real-model trace is committed.
+- [ ] **H3 — Off-the-shelf adapter (promote from M4).** Ship the `claude-agent-sdk` adapter (code
+  doable offline; a live run needs the key). *Accept:* a third-party agent runs unmodified behind it.
+- [~] **H5 — Dogfood.** Test ratio raised **0.28 → 0.36** (33 tests) with the reachability / projection /
+  curve suites; more lands with the M4 shrinker. *Accept:* reach ~0.5 test-to-source.

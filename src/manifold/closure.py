@@ -21,7 +21,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 
 from manifold.agent import Agent
-from manifold.coverage import CoverageDB, evaluate
+from manifold.coverage import CoverageDB, evaluate, project_bins
 from manifold.harness import run
 from manifold.invariants import Invariant, Violation
 from manifold.model import CoverageModel
@@ -33,6 +33,7 @@ class SweepResult:
     db: CoverageDB
     failures: list[Violation]  # deduplicated by (invariant, seed)
     results_by_seed: dict[int, list[bool]]  # seed -> per-repeat pass flag
+    trajectory: list[float] = field(default_factory=list)  # overall coverage % after each scenario
 
     @property
     def n_scenarios(self) -> int:
@@ -81,29 +82,24 @@ class _SeenFeatures:
         self.task[task] += 1
 
 
-def _hole_bonus(scn: Scenario, db: CoverageDB) -> float:
-    """Reward a candidate whose fault kind maps to an unhit `fault_seen` bin (an exact
-    hole->knob mapping — `fault_seen` bins *are* fault-kind names)."""
-    declared = db.totals.get("fault_seen")
-    if not declared:
-        return 0.0
-    got = db.hits.get("fault_seen", {})
-    kinds = [str(f.kind) for m in scn.mocks for f in m.faults] or ["none"]
-    return sum(3.0 for k in kinds if k in declared and got.get(k, 0) == 0)
-
-
 def _select_seed(
     build: Callable[[int], Scenario],
     meta: random.Random,
     seen: _SeenFeatures,
+    model: CoverageModel,
     db: CoverageDB,
     candidates: int,
 ) -> int:
+    """Pick the candidate seed whose scenario fills the most currently-unhit *reachable*
+    bins — across every coverpoint with a projection, not just `fault_seen` (H1) — breaking
+    ties by input novelty. `sample` stays pure, so the chosen seed still reproduces exactly."""
+    holes = set(db.holes())
     best_seed, best_score = 0, -1.0
     for _ in range(candidates):
         cand = meta.randrange(1, 2**31)
         scn = build(cand)
-        score = seen.novelty(scn) + _hole_bonus(scn, db)
+        fills = len(project_bins(model, scn) & holes)
+        score = 100.0 * fills + seen.novelty(scn)
         if score > best_score:
             best_score, best_seed = score, cand
     return best_seed
@@ -124,12 +120,13 @@ def sweep(
     db = CoverageDB()
     failures: dict[tuple[str, int], Violation] = {}
     results: dict[int, list[bool]] = {}
+    trajectory: list[float] = []
     seen = _SeenFeatures()
     meta = random.Random(base_seed)
 
     for i in range(scenarios):
         if coverage_directed:
-            seed = _select_seed(build_scenario, meta, seen, db, candidates)
+            seed = _select_seed(build_scenario, meta, seen, model, db, candidates)
         else:
             seed = base_seed + i
         scenario = build_scenario(seed)
@@ -142,5 +139,8 @@ def sweep(
                 failures.setdefault((v.invariant, seed), v)
         if coverage_directed:
             seen.update(scenario)
+        trajectory.append(db.pct())
 
-    return SweepResult(db=db, failures=list(failures.values()), results_by_seed=results)
+    return SweepResult(
+        db=db, failures=list(failures.values()), results_by_seed=results, trajectory=trajectory
+    )

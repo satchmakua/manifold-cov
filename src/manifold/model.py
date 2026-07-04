@@ -17,7 +17,14 @@ from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from typing import Any
 
+from manifold.scenario import Scenario
 from manifold.trace import Terminal, ToolResult, Trace
+
+# A projection predicts, from a scenario's *inputs alone* (no agent run), which bins it
+# can hit. It's what lets coverage-directed generation target holes across every
+# input-derivable coverpoint — not just `fault_seen` (ADR-0004, H1). Optional per
+# coverpoint: behaviour-derived coverpoints (e.g. terminal_reason) simply omit it.
+Projection = Callable[[Scenario], "set[str]"]
 
 
 @dataclass(frozen=True)
@@ -31,6 +38,8 @@ class Coverpoint:
     name: str
     extract: Callable[[Trace], Iterable[Any]]  # pull the values of interest from a trace
     bins: list[Bin]
+    project: Projection | None = None  # input-derivable bins, for coverage-directed selection
+    ignore: frozenset[str] = frozenset()  # declared bins that are structurally unreachable (H4)
 
 
 @dataclass(frozen=True)
@@ -38,6 +47,8 @@ class TransitionCoverpoint:
     name: str
     symbols: Callable[[Trace], list[str]]  # trace -> FSM symbol sequence
     edges: list[tuple[str, str]]  # the edges to cover (these are the "bins")
+    project: Projection | None = None
+    ignore: frozenset[str] = frozenset()  # edge names ("a->b") that can't occur
 
 
 @dataclass(frozen=True)
@@ -45,6 +56,8 @@ class Cross:
     name: str
     a: str  # coverpoint name
     b: str  # coverpoint name
+    project: Projection | None = None
+    ignore: frozenset[str] = frozenset()  # cell names ("x x y") that are illegal/impossible
 
 
 @dataclass
@@ -108,14 +121,44 @@ def _faults_seen(t: Trace) -> list[str]:
     return seen or ["none"]
 
 
+def _fault_projection(scn: Scenario) -> set[str]:
+    kinds = {str(f.kind) for m in scn.mocks for f in m.faults}
+    return kinds or {"none"}
+
+
 def fault_seen_cp() -> Coverpoint:
     """Which injected fault kinds the run actually exercised."""
-    return Coverpoint("fault_seen", _faults_seen, [Bin(f, _eq(f)) for f in _FAULTS])
+    return Coverpoint(
+        "fault_seen", _faults_seen, [Bin(f, _eq(f)) for f in _FAULTS], project=_fault_projection
+    )
 
 
 def tool_called_cp(tools: list[str]) -> Coverpoint:
     """Per-tool coverage — needs the declared tool set, so it lives in a spec."""
-    return Coverpoint("tool_called", lambda t: t.tools_called(), [Bin(x, _eq(x)) for x in tools])
+    tset = set(tools)
+
+    def project(scn: Scenario) -> set[str]:
+        return {m.tool for m in scn.mocks if m.tool in tset}
+
+    return Coverpoint(
+        "tool_called", lambda t: t.tools_called(), [Bin(x, _eq(x)) for x in tools], project=project
+    )
+
+
+def fault_by_tool_cp(tools: list[str], kinds: list[str] | None = None) -> Coverpoint:
+    """Which (tool, fault-kind) combinations were exercised — the richest input-derivable
+    coverpoint and the one coverage-directed generation can target exactly. |tools|x|kinds|
+    bins, every one reachable (the generator can inject any kind on any tool)."""
+    ks = kinds or ["error", "timeout", "garbage", "latency"]
+
+    def extract(t: Trace) -> list[str]:
+        return [f"{e.tool}:{e.fault}" for e in t.events if isinstance(e, ToolResult) and e.fault]
+
+    def project(scn: Scenario) -> set[str]:
+        return {f"{m.tool}:{f.kind}" for m in scn.mocks for f in m.faults}
+
+    bins = [Bin(f"{tool}:{k}", _eq(f"{tool}:{k}")) for tool in tools for k in ks]
+    return Coverpoint("fault_by_tool", extract, bins, project=project)
 
 
 def default_model() -> CoverageModel:

@@ -13,7 +13,6 @@ points:
 
 from __future__ import annotations
 
-import time
 from typing import Any
 
 from manifold.agent import Agent
@@ -54,11 +53,13 @@ class _RecordingEnv:
         self.events: list[Any] = []
         self.step = 0
         self.cost = 0.0
-        self._start = time.monotonic()
+        self._sim_ms = 0  # simulated wall-clock: latency faults advance it (no real sleeping)
         self._call_counts: dict[str, int] = {}
 
     def wall_ms(self) -> int:
-        return int((time.monotonic() - self._start) * 1000)
+        # Simulated, not real: keeps the whole environment deterministic (ADR-0002) and
+        # makes the `timeout` terminal reachable via accumulated latency faults.
+        return self._sim_ms
 
     def _check_budget(self) -> None:
         b = self._scn.budgets
@@ -95,6 +96,7 @@ class _RecordingEnv:
         latency = 0
         if fault is not None and fault.kind == "latency":
             latency = int(fault.detail) if fault.detail else 50
+            self._sim_ms += latency  # advance the simulated clock toward the wall budget
         if fault is not None and fault.kind == "garbage":
             value = fault.detail if fault.detail is not None else "\x00<garbage>\x00"
 

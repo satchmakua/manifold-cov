@@ -14,6 +14,7 @@ from itertools import product
 from pydantic import BaseModel, Field
 
 from manifold.model import CoverageModel, Coverpoint
+from manifold.scenario import Scenario
 from manifold.trace import Trace
 
 
@@ -67,17 +68,37 @@ def _bins_hit(cp: Coverpoint, trace: Trace) -> list[str]:
 
 
 def empty_db(model: CoverageModel) -> CoverageDB:
-    """A zero-hit DB carrying the model's full set of declared bins (the denominator)."""
+    """A zero-hit DB carrying the model's declared bins as the denominator — minus any
+    bins marked ``ignore`` (structurally unreachable / illegal, à la UVM ignore_bins), so
+    the metric never counts a coverpoint you can't actually hit (H4)."""
     totals: dict[str, list[str]] = {}
     for cp in model.coverpoints:
-        totals[cp.name] = [b.name for b in cp.bins]
+        totals[cp.name] = [b.name for b in cp.bins if b.name not in cp.ignore]
     for tc in model.transitions:
-        totals[tc.name] = [f"{a}->{b}" for a, b in tc.edges]
+        totals[tc.name] = [f"{a}->{b}" for a, b in tc.edges if f"{a}->{b}" not in tc.ignore]
     for cr in model.crosses:
         a, b = model.coverpoint(cr.a), model.coverpoint(cr.b)
         if a is not None and b is not None:
-            totals[cr.name] = [f"{x.name} x {y.name}" for x, y in product(a.bins, b.bins)]
+            cells = [f"{x.name} x {y.name}" for x, y in product(a.bins, b.bins)]
+            totals[cr.name] = [c for c in cells if c not in cr.ignore]
     return CoverageDB(hits={g: {} for g in totals}, totals=totals)
+
+
+def project_bins(model: CoverageModel, scenario: Scenario) -> set[tuple[str, str]]:
+    """The (group, bin) coverage a scenario's *inputs* can reach — from each coverpoint's
+    optional ``project`` hook, no agent run needed. This is what coverage-directed
+    selection scores candidates against (ADR-0004, H1)."""
+    reachable: set[tuple[str, str]] = set()
+    for cp in model.coverpoints:
+        if cp.project is not None:
+            reachable.update((cp.name, b) for b in cp.project(scenario))
+    for tc in model.transitions:
+        if tc.project is not None:
+            reachable.update((tc.name, b) for b in tc.project(scenario))
+    for cr in model.crosses:
+        if cr.project is not None:
+            reachable.update((cr.name, b) for b in cr.project(scenario))
+    return reachable
 
 
 def evaluate(trace: Trace, model: CoverageModel) -> CoverageDB:

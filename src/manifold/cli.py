@@ -33,7 +33,7 @@ from manifold.generate import ScenarioSpace, sample
 from manifold.harness import run as run_agent
 from manifold.invariants import Invariant, no_infinite_retry, terminates_within_budget
 from manifold.model import CoverageModel, default_model
-from manifold.report import coverage_table, write_html
+from manifold.report import coverage_table, write_curve_svg, write_html
 from manifold.scenario import Scenario
 from manifold.trace import StateSnapshot, ToolCall, ToolResult, Trace
 
@@ -46,6 +46,24 @@ console = Console()
 
 # The M0 default invariants, used when no spec/module provides its own.
 DEFAULT_INVARIANTS: list[Invariant] = [terminates_within_budget, no_infinite_retry()]
+
+
+def _force_utf8() -> None:
+    """Keep the coverage table from crashing with UnicodeEncodeError on a stock Windows
+    (cp1252) console — the rich box-drawing and bar glyphs aren't representable there."""
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is not None:
+            try:
+                reconfigure(encoding="utf-8", errors="replace")
+            except (ValueError, OSError):  # pragma: no cover - platform dependent
+                pass
+
+
+@app.callback()
+def _main() -> None:
+    """Functional coverage + constrained-random verification for AI agents."""
+    _force_utf8()
 
 
 def _load_module(path: str) -> object:
@@ -273,6 +291,84 @@ def cover(
             cells = len(a.bins) * len(b.bins) if a and b else 0
             cx_table.add_row(cr.name, f"{cr.a} x {cr.b}", str(cells))
         console.print(cx_table)
+
+
+def _reach(trajectory: list[float], target: float) -> int | None:
+    return next((i + 1 for i, p in enumerate(trajectory) if p >= target), None)
+
+
+def _milestones(n: int) -> list[int]:
+    marks = [m for m in (5, 10, 15, 20, 30, 50, 80, 120, 200, 300) if m <= n]
+    return sorted(set(marks + [n]))
+
+
+@app.command()
+def curve(
+    agent_file: str = typer.Argument(..., help="Module exposing AGENTS + SPACE/make_scenario."),
+    spec: str | None = typer.Option(None, "--spec", help="Module exposing MODEL + INVARIANTS."),
+    agent: str | None = typer.Option(None, "--agent", "-a", help="Agent id (if module has >1)."),
+    max_scenarios: int = typer.Option(250, "--max-scenarios", "-n", help="Sweep length per mode."),
+    seed: int = typer.Option(0, "--seed", "-s", help="Base seed."),
+    target: float = typer.Option(90.0, "--target", help="Target as a %% of achievable coverage."),
+    svg: str | None = typer.Option(None, "--svg", help="Write the curve as a self-contained SVG."),
+) -> None:
+    """Coverage-vs-scenarios curve: how fast coverage-directed vs random reach coverage."""
+    if max_scenarios < 1:
+        console.print("[red]--max-scenarios must be >= 1.[/]")
+        raise typer.Exit(2)
+    mod = _load_module(agent_file)
+    spec_mod = _load_module(spec) if spec else None
+    ag = _resolve_agent(mod, agent)
+    model = _resolve_model(spec_mod, mod)
+    invariants = _resolve_invariants(spec_mod, mod)
+    build = _scenario_builder(spec_mod, mod)
+
+    directed = sweep(
+        ag, build, model, invariants,
+        scenarios=max_scenarios, base_seed=seed, coverage_directed=True,
+    )
+    randomm = sweep(
+        ag, build, model, invariants,
+        scenarios=max_scenarios, base_seed=seed, coverage_directed=False,
+    )
+
+    ceiling = max(directed.db.pct(), randomm.db.pct())
+    tgt = target / 100 * ceiling
+    d_at, r_at = _reach(directed.trajectory, tgt), _reach(randomm.trajectory, tgt)
+
+    console.print(
+        f"\n[bold]Manifold curve[/] · agent=[cyan]{ag.id}[/] · up to {max_scenarios} scenarios"
+    )
+    table = Table(title="Coverage vs scenarios")
+    table.add_column("N", justify="right")
+    table.add_column("directed %", justify="right", style="green")
+    table.add_column("random %", justify="right", style="blue")
+    for n in _milestones(max_scenarios):
+        d_pct = f"{directed.trajectory[n - 1]:.0f}"
+        r_pct = f"{randomm.trajectory[n - 1]:.0f}"
+        table.add_row(str(n), d_pct, r_pct)
+    console.print(table)
+    console.print(f"Achievable coverage ≈ [bold]{ceiling:.0f}%[/] (both modes reach it eventually)")
+    if d_at is not None and r_at is not None:
+        console.print(
+            f"To reach {tgt:.0f}% ({target:.0f}% of achievable): "
+            f"[green]directed at N={d_at}[/] vs [blue]random at N={r_at}[/] "
+            f"→ [bold]{r_at / d_at:.1f}× fewer scenarios[/]"
+        )
+    full_d = _reach(directed.trajectory, ceiling - 1e-9)
+    full_r = _reach(randomm.trajectory, ceiling - 1e-9)
+    if full_d is not None and full_r is not None:
+        console.print(
+            f"To reach full {ceiling:.0f}% coverage: "
+            f"[green]directed at N={full_d}[/] vs [blue]random at N={full_r}[/] "
+            f"→ [bold]{full_r / full_d:.1f}× fewer scenarios[/]"
+        )
+    if svg:
+        write_curve_svg(
+            directed.trajectory, randomm.trajectory, svg,
+            title=f"Coverage vs scenarios — {ag.id}", target=tgt,
+        )
+        console.print(f"Curve → [bold]{svg}[/]")
 
 
 if __name__ == "__main__":  # pragma: no cover
