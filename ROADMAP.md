@@ -3,7 +3,7 @@
 The milestone checklist.
 
 **Rules of the road:**
-- Each milestone is an **independently runnable** slice, testable end-to-end.
+- Each milestone is an **independently runnable** slice — something actually testable end-to-end.
 - Every milestone ends with explicit **Test** steps — the acceptance criteria.
 - Build **top-down**: a thin end-to-end slice first, then deepen. Counts and scopes
   are budgets, not promises — split a milestone if it grows too big.
