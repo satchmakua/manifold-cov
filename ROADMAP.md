@@ -89,7 +89,7 @@ coverage %, the holes, the bugs found, and a one-line `manifold repro <seed>` fo
 > Added after an external code review (captured in `../ai-docs/project_eval/`). The
 > methodology is the most *novel* in the family and M0–M3 ship — but the flagship
 > "directed beats random" lift is an unconvincing **~2 points** (42.6% vs 40.4%), the
-> "real Claude agent" demo currently runs on a **scripted stub** (the committed trace is
+> "real Claude agent" demo, at review time, ran on a **scripted stub** (the committed trace was
 > from `ScriptedClient`, not the live API), and the testing tool has the **lowest test
 > ratio** of the family. These items fix exactly that. **Standing rule:** a milestone is
 > checked only when it has produced **one real, captured, reproducible artifact**.
@@ -121,11 +121,19 @@ coverage %, the holes, the bugs found, and a one-line `manifold repro <seed>` fo
   `budget_steps`/`timeout` reachable; structurally-impossible bins are marked `ignore` (excluded
   from the denominator, à la UVM ignore_bins). *Accept met:* a directed sweep of the research model
   reaches **100%** — every declared bin is reachable (tested). _(shipped 2026-07-03)_
-- [ ] **H2 — Find a real bug in a real agent.** *Blocked on `ANTHROPIC_API_KEY` (unavailable in the
-  build env).* The code is ready: run `manifold run examples/claude_agent.py --spec … --coverage-directed`
-  live once, commit the real trace as the offline fixture (replacing `ScriptedClient`'s), and lead the
-  README with the real bug + heatmap. *Accept:* a real-model trace is committed.
+- [x] **H2 — Verify a real agent live.** *(originally "find a real bug in a real agent" — the
+  honest outcome is better than the planned one.)* Ran the real `claude-haiku-4-5` tool-use agent
+  live (2026-07-10): on the recorded seed-7 outage it retried twice, rephrased its query, and
+  answered gracefully within budget — **the retry-forever bug does not exist in the real model**
+  (it lives on in the toy/stubborn agents and the scripted worst-case client, which the offline
+  demo contrasts side-by-side). The live 10-scenario coverage-directed sweep passed **10/10
+  invariants at 36% coverage**, and the coverage table names exactly which behaviors went
+  untested — the thesis, demonstrated on a real model. `examples/recorded/` now holds the genuine
+  trace (scrubbed; no key material); `--live` re-records it, guarded so a crashed run can't
+  clobber it and the offline demo never writes. *Accept met:* real-model trace recorded + README
+  rewritten around what it shows. _(shipped 2026-07-10)_
 - [ ] **H3 — Off-the-shelf adapter (promote from M4).** Ship the `claude-agent-sdk` adapter (code
   doable offline; a live run needs the key). *Accept:* a third-party agent runs unmodified behind it.
-- [~] **H5 — Dogfood.** Test ratio raised **0.28 → 0.36** (33 tests) with the reachability / projection /
-  curve suites; more lands with the M4 shrinker. *Accept:* reach ~0.5 test-to-source.
+- [~] **H5 — Dogfood.** Test ratio raised **0.28 → 0.36** (37 tests) with the reachability / projection /
+  curve suites + the H2 live-wiring/guard tests; more lands with the M4 shrinker. *Accept:* reach ~0.5
+  test-to-source.

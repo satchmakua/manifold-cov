@@ -34,17 +34,20 @@ manifold curve examples/research_agent.py --agent research.pipeline --svg docs/c
 That is the whole thesis in one picture: *targeting what you haven't tested finds the gaps
 faster than testing at random.*
 
-**Status:** **M0–M3 shipped + review-driven hardening (H0/H1/H4).** Manifold generates
+**Status:** **M0–M3 shipped + review-driven hardening (H0/H1/H2/H4).** Manifold generates
 seeded constrained-random scenarios with fault injection, measures functional coverage of
 the behavior space (HTML heatmap), biases generation toward holes (`--coverage-directed`,
 **~4× fewer scenarios to 90% / ~16× to full coverage, median across seeds** — above),
-surfaces per-seed **flakiness** (the `pass^k` signal), and finds reliability bugs in toy
-agents and a Claude-backed agent — each with a one-line repro. Hardening done: the flagship
-command no longer crashes on a stock Windows console (H0); every declared coverpoint is
-reachable (H4); the directed win is a *targeting* win, not a truncation artifact (H1). See
-[ROADMAP.md](ROADMAP.md). **Honest gaps:** the Claude bug is
-caught against a scripted stand-in of the tool-use loop (a live-API run is one key away — the
-code is ready); scenario shrinking and an off-the-shelf `claude-agent-sdk` adapter remain.
+surfaces per-seed **flakiness** (the `pass^k` signal), and finds reliability bugs — each
+with a one-line repro. **Verified against a real model (H2):** a live coverage-directed
+sweep of a `claude-haiku-4-5` tool-use agent passed **10/10 scenarios at 36% coverage** —
+the model handled injected outages gracefully (no retry-forever bug), and the coverage
+table named exactly which behaviors (budget/timeout terminals, error-recovery transitions)
+went *untested*. That's the thesis live: green tests + low coverage = an unfinished
+verification, and Manifold says so. The committed `examples/recorded/` trace is that real
+model run. Also done: no Windows-console crash (H0), every declared coverpoint reachable
+(H4), the directed win is genuine targeting (H1). See [ROADMAP.md](ROADMAP.md). **Honest gaps:** scenario shrinking and an off-the-shelf
+`claude-agent-sdk` adapter remain (M4/H3).
 
 ---
 
@@ -85,14 +88,18 @@ manifold run examples/toy_agents.py --spec examples/spec_example.py \
 ```
 
 Add `--coverage-directed` to bias generation toward the holes (it reaches higher coverage
-in fewer scenarios than the default `--random`). And see Manifold find a retry-to-budget
-bug in a **real Claude-backed agent** — offline, no API key needed (it analyses a committed
-recorded trace):
+in fewer scenarios than the default `--random`). And see the **real Claude agent** demo —
+offline, no API key needed. It contrasts a scripted worst-case client (retries forever —
+bounded and flagged by the harness) with the committed **genuine `claude-haiku-4-5` trace**,
+in which the live model retried a dead search tool twice, rephrased its query, then answered
+gracefully within budget:
 
 ```bash
 python examples/claude_agent.py
 # Live (needs ANTHROPIC_API_KEY + pip install "manifold-cov[claude]"):
-#   manifold run examples/claude_agent.py --spec examples/spec_example.py --scenarios 10 --coverage-directed
+#   python examples/claude_agent.py --live    # re-record the real-model fixture
+#   manifold run examples/claude_agent.py --spec examples/spec_example.py --agent claude.search \
+#       --scenarios 10 --coverage-directed    # sweep the live agent (10/10 pass @ 36% coverage)
 ```
 
 ### Commands
@@ -125,10 +132,12 @@ a spec module exposes `MODEL: CoverageModel` and `INVARIANTS` — see
   space (the multi-tool `research` agent) and marginal on a tiny one (a single-tool agent) —
   and it only steers toward coverpoints that declare a `project` hook; behaviour a coverpoint
   can't predict from inputs, both modes reach only by sampling more.
-- **The Claude bug is caught against a *scripted stand-in* of the tool-use loop**, not a live
-  model. The `anthropic` loop is real and correct; a genuine live-model trace is one
-  `ANTHROPIC_API_KEY` away (`pip install "manifold-cov[claude]"` → the `manifold run
-  examples/claude_agent.py …` command above) — the code is ready and offline-tested.
+- **Manifold found no bug in the real Claude agent — and says so.** The live sweep of
+  `claude-haiku-4-5` passed 10/10 scenarios: the model gives up after ~2 retries and answers
+  gracefully, so the planted retry-forever bug *does not exist* in the real model (the bug
+  demos are the toy/stubborn agents plus the scripted worst-case client). What the live run
+  *does* show is 36% coverage — the passing verdict spans only a third of the declared
+  behavior space, and the named holes are the honest caveat on "it passed."
 - **Off-the-shelf agents + scenario shrinking are still roadmap** (M4 / H3): an adapter for the
   `claude-agent-sdk` and a delta-debug minimizer that reduces a failing scenario to its smallest
   reproducer.

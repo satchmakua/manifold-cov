@@ -2,20 +2,28 @@
 
 ``ClaudeSearchAgent`` runs the standard ``anthropic`` Messages API tool-use loop with a
 single ``search`` tool, calling it through Manifold's ``env`` (which serves the mocked
-response and injects faults). When the search tool keeps failing, a real model tends to
-retry — and Manifold bounds that with the step budget and flags it.
+response and injects faults). ``examples/recorded/claude_search_retry.jsonl`` is a
+**genuine claude-haiku-4-5 trace recorded live** (2026-07-10): under a persistent search
+outage the real model retried twice — rephrasing its query — then answered gracefully
+within budget. A live 10-scenario coverage-directed sweep passed every invariant at
+**36% coverage**: the model is robust here, and the coverage table names exactly which
+behaviors (budget/timeout terminals, error-recovery transitions) were *not* exercised —
+which is Manifold's point. The deterministic ``ScriptedClient`` below is the worst-case
+contrast: a stand-in that retries forever, which the harness bounds and flags.
 
 Running it:
 
-* **Live** — needs ``ANTHROPIC_API_KEY`` and ``pip install "manifold-cov[claude]"``:
+* **Offline** (no key, free, deterministic) — ``python examples/claude_agent.py`` drives
+  the scripted worst case and prints its verdict next to the committed real-model
+  fixture's. Never writes the fixture.
+
+* **Live sweep** — needs ``ANTHROPIC_API_KEY`` and ``pip install "manifold-cov[claude]"``:
 
       manifold run examples/claude_agent.py --spec examples/spec_example.py \\
-          --scenarios 10 --coverage-directed
+          --agent claude.search --scenarios 10 --coverage-directed
 
-* **Offline** (no key, free, deterministic) — a scripted stand-in client drives the same
-  loop, and ``python examples/claude_agent.py`` records the trace + prints the verdict.
-  ``examples/recorded/claude_search_retry.jsonl`` is that committed recording; the demo's
-  test analyses it with no API call. Re-record with a real key for a genuine model trace.
+* **Re-record the fixture** — ``python examples/claude_agent.py --live`` runs the seed-7
+  scenario against the real API and overwrites the recording. Run once, inspect, commit.
 
 The ``anthropic`` package is imported lazily (only on a live run), so this module imports
 fine — and the offline demo/test runs — without it installed.
@@ -25,6 +33,7 @@ from __future__ import annotations
 
 import os
 import random
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -52,7 +61,13 @@ def _live_client() -> Any:
             "ClaudeSearchAgent needs ANTHROPIC_API_KEY and `pip install \"manifold-cov[claude]\"` "
             "to run live. For an offline demo, run `python examples/claude_agent.py` (scripted)."
         )
-    import anthropic  # lazy: keep the module importable without the package
+    try:
+        import anthropic  # lazy: keep the module importable without the package
+    except ImportError as exc:
+        raise RuntimeError(
+            "the `anthropic` package is not installed - run `pip install \"manifold-cov[claude]\"` "
+            "to enable live runs."
+        ) from exc
 
     return anthropic.Anthropic()
 
@@ -105,9 +120,11 @@ class ClaudeSearchAgent:
 
 
 # --- Offline stand-in --------------------------------------------------------
-# A stubborn model that always retries `search` and never gives up. Drives the exact
-# same agent loop with no API key, producing the recorded bug trace. A real model is
-# nondeterministic; this is the deterministic floor for the offline demo/test.
+# A stubborn model that always retries `search` and never gives up — the worst-case
+# retry behavior the harness must bound. Drives the exact same agent loop with no API
+# key. The real claude-haiku-4-5, recorded live in `examples/recorded/`, behaves
+# *better*: it retries twice then answers gracefully — the scripted client is the
+# deterministic contrast (and the offline test of the budget guardrail).
 
 
 @dataclass
@@ -163,19 +180,12 @@ def make_scenario(seed: int) -> Scenario:
 RECORDED = Path(__file__).resolve().parent / "recorded" / "claude_search_retry.jsonl"
 
 
-def _offline_demo() -> None:
-    """Run the scripted agent through the harness, print the verdict, (re)write the trace."""
-    from manifold.harness import run
+def _print_verdict(trace: Any) -> None:
+    """Print a trace's call count, terminal reason, and invariant verdicts."""
     from manifold.invariants import no_infinite_retry, terminates_within_budget
-
-    agent = ClaudeSearchAgent(client=ScriptedClient())
-    trace = run(agent, make_scenario(7))
-    RECORDED.parent.mkdir(parents=True, exist_ok=True)
-    trace.dump_jsonl(RECORDED)
 
     terminal = trace.terminal
     reason = terminal.reason if terminal else "?"
-    print(f"Manifold - agent={agent.id} - seed=0x7 (offline scripted client)")
     print(f"  {len(trace.tools_called())} search calls, terminal reason = {reason}")
     checks = [
         ("terminates_within_budget", terminates_within_budget),
@@ -185,9 +195,51 @@ def _offline_demo() -> None:
         v = inv(trace)
         detail = f" - {v.detail}" if v else ""
         print(f"  {'FAIL' if v else 'PASS'} {name}{detail}")
-    print(f"  recorded -> {RECORDED}")
+
+
+def _demo(live: bool = False) -> None:
+    """Offline (default): drive the loop with the deterministic ``ScriptedClient`` — the
+    worst-case retry-forever stand-in the harness bounds at the step budget — and contrast
+    it with the committed *real-model* fixture. The fixture is never written offline.
+
+    ``live=True``: run the real API on the same seed-7 scenario and (re)record the
+    fixture. Missing key / missing extra fail fast before anything runs; a run that
+    crashes (bad key, rate limit, network) exits non-zero and leaves the fixture alone.
+    """
+    from manifold.harness import run
+    from manifold.trace import AgentError, Trace
+
+    client = _live_client() if live else ScriptedClient()
+    agent = ClaudeSearchAgent(client=client)
+    trace = run(agent, make_scenario(7))
+
+    terminal = trace.terminal
+    reason = terminal.reason if terminal else "?"
+    if reason == "error":  # the run crashed (e.g. auth/rate-limit live) - keep the good fixture
+        err = next((e for e in trace.events if isinstance(e, AgentError)), None)
+        detail = f"{err.etype}: {err.message}" if err else "unknown error"
+        print(f"error: run crashed ({detail})")
+        print(f"  {RECORDED} left untouched - fix the cause and re-run")
+        raise SystemExit(3)
+
+    source = f"live model: {MODEL}" if live else "offline scripted client (worst-case stand-in)"
+    print(f"Manifold - agent={agent.id} - seed=0x7 ({source})")
+    _print_verdict(trace)
+
+    if live:
+        RECORDED.parent.mkdir(parents=True, exist_ok=True)
+        trace.dump_jsonl(RECORDED)
+        print(f"  recorded -> {RECORDED}")
+    elif RECORDED.exists():
+        print(f"Committed real-model fixture ({MODEL}, recorded live):")
+        _print_verdict(Trace.load_jsonl(RECORDED))
+        print("  re-record: python examples/claude_agent.py --live  (needs ANTHROPIC_API_KEY)")
     print("  reproduce: manifold repro 7 examples/claude_agent.py --agent claude.search")
 
 
 if __name__ == "__main__":
-    _offline_demo()
+    try:
+        _demo(live="--live" in sys.argv[1:])
+    except RuntimeError as exc:  # missing key / missing extra — say so cleanly, no traceback
+        print(f"error: {exc}")
+        raise SystemExit(2) from None
