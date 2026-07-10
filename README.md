@@ -34,7 +34,7 @@ manifold curve examples/research_agent.py --agent research.pipeline --svg docs/c
 That is the whole thesis in one picture: *targeting what you haven't tested finds the gaps
 faster than testing at random.*
 
-**Status:** **M0–M3 shipped + review-driven hardening (H0/H1/H2/H4).** Manifold generates
+**Status:** **M0–M3 shipped + review-driven hardening (H0–H5).** Manifold generates
 seeded constrained-random scenarios with fault injection, measures functional coverage of
 the behavior space (HTML heatmap), biases generation toward holes (`--coverage-directed`,
 **~4× fewer scenarios to 90% / ~16× to full coverage, median across seeds** — above),
@@ -46,8 +46,10 @@ table named exactly which behaviors (budget/timeout terminals, error-recovery tr
 went *untested*. That's the thesis live: green tests + low coverage = an unfinished
 verification, and Manifold says so. The committed `examples/recorded/` trace is that real
 model run. Also done: no Windows-console crash (H0), every declared coverpoint reachable
-(H4), the directed win is genuine targeting (H1). See [ROADMAP.md](ROADMAP.md). **Honest gaps:** scenario shrinking and an off-the-shelf
-`claude-agent-sdk` adapter remain (M4/H3).
+(H4), the directed win is genuine targeting (H1), and Manifold verifies an **off-the-shelf
+`claude-agent-sdk` agent unmodified** — the SDK's own agent loop, its tool calls routed
+through Manifold's mocked env via an in-process MCP server (H3). See [ROADMAP.md](ROADMAP.md). **Honest gap:** scenario shrinking (a delta-debug minimizer)
+is the remaining M4 stretch.
 
 ---
 
@@ -100,6 +102,17 @@ python examples/claude_agent.py
 #   python examples/claude_agent.py --live    # re-record the real-model fixture
 #   manifold run examples/claude_agent.py --spec examples/spec_example.py --agent claude.search \
 #       --scenarios 10 --coverage-directed    # sweep the live agent (10/10 pass @ 36% coverage)
+```
+
+And verify an **off-the-shelf `claude-agent-sdk` agent** — the SDK runs its own agent loop
+in a bundled `claude` CLI, and Manifold routes its tool calls through the mocked env via an
+in-process MCP server, so the third-party agent is verified *unmodified*:
+
+```bash
+python examples/sdk_agent.py
+# Live (needs ANTHROPIC_API_KEY + pip install "manifold-cov[sdk]"; the wheel bundles the CLI):
+#   python examples/sdk_agent.py --live                              # re-record the real-SDK fixture
+#   manifold run examples/sdk_agent.py --agent sdk.search --scenarios 2   # sweep the live SDK agent
 ```
 
 ### Commands

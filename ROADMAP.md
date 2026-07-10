@@ -69,12 +69,12 @@ Maps directly to DESIGN.md §8.
 
 ## Phase 3 — Depth (stretch)
 
-- [ ] **M4 — Crosses, shrinking, real-framework adapter.** Cross-coverage; an
-  own delta-debug **shrinker** that minimizes a failing `Scenario`; a `claude-agent-sdk`
-  adapter so Manifold verifies an off-the-shelf agent; optional parallel scenario
-  execution.
-  **Test:** a failing scenario shrinks to a minimal reproducer; `manifold run` works
-  against a `claude-agent-sdk` agent through the adapter.
+- [~] **M4 — Crosses, shrinking, real-framework adapter.** Cross-coverage **[done in M1]**; the
+  `claude-agent-sdk` adapter so Manifold verifies an off-the-shelf agent **[done — see H3]**; an
+  own delta-debug **shrinker** that minimizes a failing `Scenario` **[remaining]**; optional
+  parallel scenario execution **[remaining]**.
+  **Test:** `manifold run` works against a `claude-agent-sdk` agent through the adapter **[met — H3]**;
+  a failing scenario shrinks to a minimal reproducer **[pending the shrinker]**.
 
 ---
 
@@ -132,8 +132,22 @@ coverage %, the holes, the bugs found, and a one-line `manifold repro <seed>` fo
   trace (scrubbed; no key material); `--live` re-records it, guarded so a crashed run can't
   clobber it and the offline demo never writes. *Accept met:* real-model trace recorded + README
   rewritten around what it shows. _(shipped 2026-07-10)_
-- [ ] **H3 — Off-the-shelf adapter (promote from M4).** Ship the `claude-agent-sdk` adapter (code
-  doable offline; a live run needs the key). *Accept:* a third-party agent runs unmodified behind it.
-- [~] **H5 — Dogfood.** Test ratio raised **0.28 → 0.36** (37 tests) with the reachability / projection /
-  curve suites + the H2 live-wiring/guard tests; more lands with the M4 shrinker. *Accept:* reach ~0.5
-  test-to-source.
+- [x] **H3 — Off-the-shelf adapter (promote from M4).** Shipped `examples/sdk_agent.py`: a Manifold
+  `Agent` that wraps Anthropic's higher-level **`claude-agent-sdk`** — the agent loop + tool dispatch
+  run in the SDK's bundled `claude` CLI subprocess, and the adapter exposes Manifold's `env` as an
+  **in-process MCP server** so the third-party agent's tool calls flow through the mock/fault/budget
+  machinery *unmodified*. Load-bearing subtlety: the SDK's MCP layer only catches `Exception`, so a
+  raised `BudgetExceeded` (a `BaseException`) would be swallowed in a detached task — the adapter
+  catches it at the handler, stashes it, and re-raises **outside** the SDK loop, keeping budget
+  enforcement non-swallowable across the process boundary. *Accept met (live 2026-07-10):*
+  `manifold run examples/sdk_agent.py --agent sdk.search --scenarios 2` drove the real SDK agent
+  through the adapter (2/2 invariants pass), and `python examples/sdk_agent.py --live` recorded a
+  genuine SDK trace (the agent retried the outage twice, rephrasing its query, then answered
+  gracefully — committed at `examples/recorded/sdk_search.jsonl`). No npm needed: the wheel bundles
+  the CLI. Offline: 11 adapter tests cover the bridge (routing, ToolError→is_error, budget
+  stash+re-raise, and the re-record guard — an adversarial review caught that a degenerate
+  live trace could silently clobber the fixture; fixed) with no key/subprocess. _(shipped 2026-07-10)_
+- [x] **H5 — Dogfood.** Test-to-source **0.28 → 0.57** (50 tests; **705 test LOC / 1239 source LOC**,
+  raw count) with the reachability / projection / curve suites + the H2 live-wiring/guard tests + the
+  H3 adapter-bridge suite. *Accept met:* at/above the ~0.5 goal by raw LOC (figure stated so the
+  reader can recompute); the M4 shrinker will add more. _(shipped 2026-07-10)_

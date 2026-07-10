@@ -11,6 +11,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 from types import ModuleType
+from typing import Any
 
 import pytest
 
@@ -57,17 +58,67 @@ def test_offline_demo_never_writes_the_fixture(
     assert not (tmp_path / "fixture.jsonl").exists()
 
 
-def test_live_flag_wiring_records_a_trace(
+def _graceful_client(claude: ModuleType) -> Any:
+    """A stand-in that calls `search` twice (both faulted) then answers — the graceful-
+    recovery shape the fixture contract requires, so `--live` records it."""
+
+    class _Messages:
+        n = 0
+
+        def create(self, **_: Any) -> Any:
+            self.n += 1
+            if self.n <= 2:
+                block = claude._Block(type="tool_use", id=f"t{self.n}", name="search", input={})
+                return claude._Response(content=[block], stop_reason="tool_use")
+            block = claude._Block(type="text", text="Here is the answer.")
+            return claude._Response(content=[block], stop_reason="end_turn")
+
+    class _Client:
+        def __init__(self) -> None:
+            self.messages = _Messages()
+
+    return _Client()
+
+
+def test_live_flag_records_a_graceful_trace(
     claude: ModuleType, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    # H2 readiness: `--live` must build the client up front and (re)write the fixture.
-    # Stand in for the API so the wiring is proven end-to-end without a key.
-    monkeypatch.setattr(claude, "_live_client", lambda: claude.ScriptedClient())
-    monkeypatch.setattr(claude, "RECORDED", tmp_path / "live.jsonl")
+    # H2 readiness: `--live` builds the client up front and records a graceful-recovery
+    # trace (completed, >=2 calls) — the shape the fixture contract accepts. No key needed.
+    monkeypatch.setattr(claude, "_live_client", lambda: _graceful_client(claude))
+    fixture = tmp_path / "live.jsonl"
+    monkeypatch.setattr(claude, "RECORDED", fixture)
     claude._demo(live=True)
-    trace = Trace.load_jsonl(tmp_path / "live.jsonl")
+    trace = Trace.load_jsonl(fixture)
     assert trace.agent_id == "claude.search"
     assert isinstance(trace.terminal, Terminal)
+    assert trace.terminal.reason == "completed"
+    assert len(trace.tools_called()) == 2
+
+
+def test_live_rerecord_refuses_to_clobber_a_degenerate_trace(
+    claude: ModuleType, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    # Regression (adversarial review): a live re-record that doesn't match the graceful-
+    # recovery contract (here: the model answers with 0 tool calls) must leave the committed
+    # fixture untouched and exit non-zero, not silently overwrite it with a green verdict.
+    class _Messages:
+        def create(self, **_: Any) -> Any:
+            block = claude._Block(type="text", text="Answered from priors, no search.")
+            return claude._Response(content=[block], stop_reason="end_turn")
+
+    class _Client:
+        def __init__(self) -> None:
+            self.messages = _Messages()
+
+    monkeypatch.setattr(claude, "_live_client", lambda: _Client())
+    fixture = tmp_path / "live.jsonl"
+    fixture.write_text("precious\n", encoding="utf-8")
+    monkeypatch.setattr(claude, "RECORDED", fixture)
+    with pytest.raises(SystemExit) as exc_info:
+        claude._demo(live=True)
+    assert exc_info.value.code == 4
+    assert fixture.read_text(encoding="utf-8") == "precious\n"  # committed fixture unchanged
 
 
 def test_live_without_key_fails_fast(

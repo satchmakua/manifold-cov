@@ -28,6 +28,7 @@ dependencies = [
 # Pulled in only when the feature is used; keeps the core install light.
 # (The HTML report uses stdlib templating — no extra dependency.)
 claude = ["anthropic>=0.40"]  # M3: the real Claude-backed example agent
+sdk = ["claude-agent-sdk>=0.2"]  # H3: verify an off-the-shelf claude-agent-sdk agent
 dev = ["pytest>=8.3", "ruff>=0.8", "mypy>=1.13"]
 
 [project.scripts]

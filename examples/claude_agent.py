@@ -197,6 +197,28 @@ def _print_verdict(trace: Any) -> None:
         print(f"  {'FAIL' if v else 'PASS'} {name}{detail}")
 
 
+def _record_or_refuse(trace: Any, reason: str) -> None:
+    """Overwrite the committed fixture only if the live trace matches the graceful-recovery
+    contract the demo + tests assert (``completed`` with >=2 tool calls). A model that
+    answers without retrying, or blows the budget, is a real change: write a side copy,
+    leave the committed fixture UNCHANGED, and exit non-zero — so a non-representative trace
+    can't be committed silently (the crash case is handled earlier)."""
+    RECORDED.parent.mkdir(parents=True, exist_ok=True)
+    if reason == "completed" and len(trace.tools_called()) >= 2:
+        trace.dump_jsonl(RECORDED)
+        print(f"  recorded -> {RECORDED}")
+        return
+    side = RECORDED.with_suffix(".new.jsonl")
+    trace.dump_jsonl(side)
+    print(
+        f"  WARNING: live trace ({len(trace.tools_called())} calls, reason={reason}) does not "
+        "match the graceful-recovery contract (completed, >=2 calls) the demo + tests assert."
+    )
+    print(f"  wrote {side} for inspection; the committed fixture is UNCHANGED.")
+    print("  if this is the model's real new behavior, update the demo + tests, then replace it.")
+    raise SystemExit(4)
+
+
 def _demo(live: bool = False) -> None:
     """Offline (default): drive the loop with the deterministic ``ScriptedClient`` — the
     worst-case retry-forever stand-in the harness bounds at the step budget — and contrast
@@ -227,9 +249,7 @@ def _demo(live: bool = False) -> None:
     _print_verdict(trace)
 
     if live:
-        RECORDED.parent.mkdir(parents=True, exist_ok=True)
-        trace.dump_jsonl(RECORDED)
-        print(f"  recorded -> {RECORDED}")
+        _record_or_refuse(trace, reason)
     elif RECORDED.exists():
         print(f"Committed real-model fixture ({MODEL}, recorded live):")
         _print_verdict(Trace.load_jsonl(RECORDED))

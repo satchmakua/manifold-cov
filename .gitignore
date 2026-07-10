@@ -39,3 +39,6 @@ __pycache__/
 report.html
 runs/
 /*.jsonl
+# `--live` writes a `*.new.jsonl` side copy when a re-record doesn't match the fixture
+# contract; it's a scratch inspection artifact and must never be committed.
+*.new.jsonl

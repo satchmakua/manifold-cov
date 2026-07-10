@@ -46,6 +46,13 @@ def research() -> ModuleType:
 
 
 @pytest.fixture(scope="session")
+def sdk() -> ModuleType:
+    # Loading this proves the module imports without `claude-agent-sdk` needed at import
+    # time (the SDK is imported lazily inside the live driver only).
+    return _load("sdk_agent")
+
+
+@pytest.fixture(scope="session")
 def error_seed(toy: ModuleType) -> int:
     """A seed whose scenario injects a persistent `search` outage."""
     for s in range(500):
