@@ -25,6 +25,7 @@ from pathlib import Path
 
 import typer
 from rich.console import Console
+from rich.markup import escape
 from rich.table import Table
 
 from manifold.agent import Agent
@@ -35,6 +36,7 @@ from manifold.invariants import Invariant, no_infinite_retry, terminates_within_
 from manifold.model import CoverageModel, default_model
 from manifold.report import coverage_table, write_curve_svg, write_html
 from manifold.scenario import Scenario
+from manifold.shrink import shrink as shrink_scenario
 from manifold.trace import StateSnapshot, ToolCall, ToolResult, Trace
 
 app = typer.Typer(
@@ -133,6 +135,21 @@ def _inv_name(inv: Invariant) -> str:
     return getattr(inv, "__name__", None) or "invariant"
 
 
+def _scenario_summary(scn: Scenario) -> str:
+    """A compact one-block rendering of a scenario, for shrink before/after output.
+    Avoids ``[...]`` so it renders literally (rich treats brackets as style markup)."""
+    mocks = ", ".join(
+        f"{m.tool}={'+'.join(f'{f.kind}@{f.at_call}' for f in m.faults) or 'ok'}"
+        for m in scn.mocks
+    )
+    b = scn.budgets
+    return (
+        f"mocks: {mocks or '(none)'}\n"
+        f"  budgets: steps={b.max_steps} cost={b.max_cost:g} wall_ms={b.wall_ms}\n"
+        f"  task: {scn.task!r}"
+    )
+
+
 def _describe(ev: object) -> str:
     if isinstance(ev, ToolCall):
         return f"{ev.tool}({', '.join(f'{k}={v!r}' for k, v in ev.args.items())})"
@@ -155,6 +172,9 @@ def run(
         False, "--coverage-directed/--random", help="Bias generation toward coverage holes."
     ),
     html: str | None = typer.Option(None, "--html", help="Write a static HTML coverage report."),
+    shrink: bool = typer.Option(
+        False, "--shrink/--no-shrink", help="Minimize the first failure to a minimal reproducer."
+    ),
 ) -> None:
     """Sweep N seeded scenarios, measure coverage, and report holes + flaky seeds + failures."""
     mod = _load_module(agent_file)
@@ -209,6 +229,16 @@ def run(
         console.print(
             f"\nReproduce: [bold]manifold repro {ex.seed} {agent_file} --agent {ag.id}{spec_arg}[/]"
         )
+        if shrink:  # minimize the first failure to a minimal reproducer (the one-screen demo)
+            shr = shrink_scenario(ag, build(ex.seed), invariants, repeats=repeats)
+            if shr.preserved and shr.minimal_size < shr.original_size:
+                head = escape(_scenario_summary(shr.minimal).splitlines()[0])
+                console.print(
+                    f"Minimal repro (shrunk {shr.original_size}->{shr.minimal_size}, "
+                    f"[bold]-{shr.reduction_pct:.0f}%[/] in {shr.evaluations} evals): "
+                    f"[dim]{head}[/]\n  [bold]manifold shrink {ex.seed} {agent_file} "
+                    f"--agent {ag.id}{spec_arg}[/]"
+                )
 
     if html:
         write_html(result.db, failures, html, title=f"Manifold · {ag.id}")
@@ -291,6 +321,43 @@ def cover(
             cells = len(a.bins) * len(b.bins) if a and b else 0
             cx_table.add_row(cr.name, f"{cr.a} x {cr.b}", str(cells))
         console.print(cx_table)
+
+
+@app.command()
+def shrink(
+    seed: int = typer.Argument(..., help="A failing scenario seed to minimize."),
+    agent_file: str = typer.Argument(..., help="Module exposing AGENTS + SPACE/make_scenario."),
+    spec: str | None = typer.Option(None, "--spec", help="Module exposing INVARIANTS."),
+    agent: str | None = typer.Option(None, "--agent", "-a", help="Agent id (if module has >1)."),
+    repeats: int = typer.Option(
+        1, "--repeats", "-k", help="Runs per candidate (for nondeterministic agents)."
+    ),
+) -> None:
+    """Delta-debug a failing scenario down to a minimal still-failing reproducer."""
+    mod = _load_module(agent_file)
+    spec_mod = _load_module(spec) if spec else None
+    ag = _resolve_agent(mod, agent)
+    invariants = _resolve_invariants(spec_mod, mod)
+    build = _scenario_builder(spec_mod, mod)
+    result = shrink_scenario(ag, build(seed), invariants, repeats=repeats)
+
+    if not result.preserved:
+        console.print(f"[yellow]Seed 0x{seed:x} fails no invariant — nothing to shrink.[/]")
+        raise typer.Exit(0)
+
+    console.print(
+        f"\n[bold]Shrink[/] · seed=0x{seed:x} · agent=[cyan]{ag.id}[/] · "
+        f"preserving [red]{', '.join(result.preserved)}[/]"
+    )
+    console.print(f"\n[dim]ORIGINAL (size {result.original_size}):[/]")
+    console.print(_scenario_summary(result.original), markup=False)
+    console.print(
+        f"\n[bold green]MINIMAL[/] (size {result.minimal_size}, "
+        f"[bold]-{result.reduction_pct:.0f}%[/], {result.evaluations} evals):"
+    )
+    console.print(_scenario_summary(result.minimal), markup=False)
+    console.print("\n[bold]Minimal reproducer[/] (Scenario JSON — replays this bug exactly):")
+    console.print(result.minimal.model_dump_json(indent=2))
 
 
 def _reach(trajectory: list[float], target: float) -> int | None:

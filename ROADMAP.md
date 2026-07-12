@@ -69,12 +69,15 @@ Maps directly to DESIGN.md §8.
 
 ## Phase 3 — Depth (stretch)
 
-- [~] **M4 — Crosses, shrinking, real-framework adapter.** Cross-coverage **[done in M1]**; the
-  `claude-agent-sdk` adapter so Manifold verifies an off-the-shelf agent **[done — see H3]**; an
-  own delta-debug **shrinker** that minimizes a failing `Scenario` **[remaining]**; optional
-  parallel scenario execution **[remaining]**.
-  **Test:** `manifold run` works against a `claude-agent-sdk` agent through the adapter **[met — H3]**;
-  a failing scenario shrinks to a minimal reproducer **[pending the shrinker]**.
+- [x] **M4 — Crosses, shrinking, real-framework adapter.** Cross-coverage **[done in M1]**; the
+  `claude-agent-sdk` adapter so Manifold verifies an off-the-shelf agent **[done — H3]**; an own
+  delta-debug **shrinker** that minimizes a failing `Scenario` **[done — `shrink.py`, `manifold
+  shrink`, ADR-0005]**. (Optional parallel scenario execution was a stretch-within-the-stretch and
+  is not built — noted, not silently dropped.)
+  **Test met:** `manifold run` works against a `claude-agent-sdk` agent through the adapter (H3);
+  `manifold shrink 1 examples/research_agent.py --agent research.stubborn` reduces a 9-atom failing
+  scenario to a 2-atom minimal reproducer (**−78%**, 18 evals) that still fails both invariants —
+  artifact at `docs/shrink_example.txt`. _(shipped 2026-07-12)_
 
 ---
 

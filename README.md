@@ -48,8 +48,10 @@ verification, and Manifold says so. The committed `examples/recorded/` trace is 
 model run. Also done: no Windows-console crash (H0), every declared coverpoint reachable
 (H4), the directed win is genuine targeting (H1), and Manifold verifies an **off-the-shelf
 `claude-agent-sdk` agent unmodified** — the SDK's own agent loop, its tool calls routed
-through Manifold's mocked env via an in-process MCP server (H3). See [ROADMAP.md](ROADMAP.md). **Honest gap:** scenario shrinking (a delta-debug minimizer)
-is the remaining M4 stretch.
+through Manifold's mocked env via an in-process MCP server (H3). **M4 complete:** a delta-debug
+**shrinker** (`manifold shrink`) reduces a failing scenario to its minimal reproducer (below).
+See [ROADMAP.md](ROADMAP.md). The **Honest limits** section below
+says what it can't do.
 
 ---
 
@@ -115,6 +117,26 @@ python examples/sdk_agent.py
 #   manifold run examples/sdk_agent.py --agent sdk.search --scenarios 2   # sweep the live SDK agent
 ```
 
+And **shrink a failing scenario to its minimal reproducer** — delta-debugging finds the
+essential core of the bug ([full output](docs/shrink_example.txt)):
+
+```bash
+manifold shrink 1 examples/research_agent.py --agent research.stubborn
+```
+```
+ORIGINAL (size 9):
+  mocks: search=ok, fetch=latency@0, summarize=timeout@-1
+  budgets: steps=15 cost=100 wall_ms=5000   task: 'stock price AAPL'
+MINIMAL (size 2, -78%, 18 evals):
+  mocks: summarize=timeout@-1
+  budgets: steps=7 cost=7 wall_ms=30000     task: None
+```
+
+Everything not load-bearing is gone — two tools, a latency blip, the task, and most of the
+budget — leaving the one persistent `summarize` fault the agent retries to death, plus the
+smallest budget that still shows ≥4 retries. The minimal `Scenario` (printed as JSON) replays
+the bug exactly. `manifold run … --shrink` does this inline for the first failure it finds.
+
 ### Commands
 
 | Command | What it does |
@@ -122,8 +144,9 @@ python examples/sdk_agent.py
 | `manifold run <file> [--spec S] [--agent NAME] [--scenarios N] [--seed S] [--repeats K] [--coverage-directed] [--html PATH]` | Sweep N seeded scenarios (×K repeats); report coverage % + holes, flaky seeds, and invariant failures with a repro for each. |
 | `manifold repro <seed> <file> [--spec S] [--agent NAME]` | Re-run one scenario by seed; print its full trace + verdict. |
 | `manifold curve <file> [--spec S] [--max-scenarios N] [--svg PATH]` | Sweep both modes and chart coverage vs scenarios (directed vs random) — writes a self-contained SVG. |
+| `manifold shrink <seed> <file> [--spec S] [--agent NAME] [--repeats K]` | Delta-debug a failing seed's scenario to a minimal still-failing reproducer (before/after + JSON). |
 | `manifold cover <spec_file>` | List the declared coverage model (coverpoints, FSM edges, crosses). |
-| `make demo` | Produce all the artifacts (heatmap + coverage curve + Claude bug) after `make check`. |
+| `make demo` | Produce all the artifacts (heatmap + coverage curve + shrink + Claude bug) after `make check`. |
 | `ruff check . && mypy && pytest` | Lint, typecheck (strict), and run the test suite (`make check`). |
 
 A target module exposes `AGENTS: dict[str, Agent]` and `make_scenario(seed) -> Scenario`;
@@ -151,9 +174,12 @@ a spec module exposes `MODEL: CoverageModel` and `INVARIANTS` — see
   demos are the toy/stubborn agents plus the scripted worst-case client). What the live run
   *does* show is 36% coverage — the passing verdict spans only a third of the declared
   behavior space, and the named holes are the honest caveat on "it passed."
-- **Off-the-shelf agents + scenario shrinking are still roadmap** (M4 / H3): an adapter for the
-  `claude-agent-sdk` and a delta-debug minimizer that reduces a failing scenario to its smallest
-  reproducer.
+- **The shrinker is greedy, not provably minimal.** `manifold shrink` delta-debugs a failing
+  scenario to a small, verified-still-failing reproducer — not a proof of the globally smallest
+  one. It re-runs the agent per candidate (the eval count is printed), so shrinking a live/expensive
+  agent is metered; `manifold run` only shrinks on an explicit `--shrink`.
+- **No parallel scenario execution.** The sweep runs scenarios sequentially; a parallel executor was
+  a stretch-within-a-stretch and isn't built. Not a correctness limit, a throughput one.
 
 ## Project docs
 

@@ -1,0 +1,37 @@
+﻿
+Shrink · seed=0x1 · agent=research.stubborn · preserving no_infinite_retry, 
+terminates_within_budget
+
+ORIGINAL (size 9):
+mocks: search=ok, fetch=latency@0, summarize=timeout@-1
+  budgets: steps=15 cost=100 wall_ms=5000
+  task: 'stock price AAPL'
+
+MINIMAL (size 2, -78%, 18 evals):
+mocks: summarize=timeout@-1
+  budgets: steps=7 cost=7 wall_ms=30000
+  task: None
+
+Minimal reproducer (Scenario JSON — replays this bug exactly):
+{
+  "seed": 1,
+  "task": null,
+  "mocks": [
+    {
+      "tool": "summarize",
+      "responses": [],
+      "faults": [
+        {
+          "at_call": -1,
+          "kind": "timeout",
+          "detail": null
+        }
+      ]
+    }
+  ],
+  "budgets": {
+    "max_steps": 7,
+    "max_cost": 7.0,
+    "wall_ms": 30000
+  }
+}
