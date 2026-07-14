@@ -32,7 +32,12 @@ from manifold.agent import Agent
 from manifold.closure import sweep
 from manifold.generate import ScenarioSpace, sample
 from manifold.harness import run as run_agent
-from manifold.invariants import Invariant, no_infinite_retry, terminates_within_budget
+from manifold.invariants import (
+    Invariant,
+    no_agent_crash,
+    no_infinite_retry,
+    terminates_within_budget,
+)
 from manifold.model import CoverageModel, default_model
 from manifold.report import coverage_table, write_curve_svg, write_html
 from manifold.scenario import Scenario
@@ -46,8 +51,13 @@ app = typer.Typer(
 )
 console = Console()
 
-# The M0 default invariants, used when no spec/module provides its own.
-DEFAULT_INVARIANTS: list[Invariant] = [terminates_within_budget, no_infinite_retry()]
+# The default invariants, used when no spec/module provides its own. `no_agent_crash`
+# joined post-v1: an `error` terminal previously failed no invariant at all.
+DEFAULT_INVARIANTS: list[Invariant] = [
+    terminates_within_budget,
+    no_infinite_retry(),
+    no_agent_crash,
+]
 
 
 def _force_utf8() -> None:
@@ -175,6 +185,9 @@ def run(
     shrink: bool = typer.Option(
         False, "--shrink/--no-shrink", help="Minimize the first failure to a minimal reproducer."
     ),
+    parallel: int = typer.Option(
+        1, "--parallel", "-p", help="Concurrent agent runs (identical results, faster wall-clock)."
+    ),
 ) -> None:
     """Sweep N seeded scenarios, measure coverage, and report holes + flaky seeds + failures."""
     mod = _load_module(agent_file)
@@ -187,7 +200,7 @@ def run(
     result = sweep(
         ag, build, model, invariants,
         scenarios=scenarios, base_seed=seed, repeats=repeats,
-        coverage_directed=coverage_directed,
+        coverage_directed=coverage_directed, parallel=parallel,
     )
     spec_arg = f" --spec {spec}" if spec else ""
 

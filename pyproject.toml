@@ -29,6 +29,13 @@ dependencies = [
 # (The HTML report uses stdlib templating — no extra dependency.)
 claude = ["anthropic>=0.40"]  # M3: the real Claude-backed example agent
 sdk = ["claude-agent-sdk>=0.2"]  # H3: verify an off-the-shelf claude-agent-sdk agent
+wild = [  # W3: the wild-framework hunt (three third-party agent adapters)
+  "langgraph>=1.2",
+  "langchain-anthropic>=1.4",
+  "smolagents[litellm]>=1.26",
+  "fastapi>=0.115",  # litellm 1.92 imports it undeclared; without it smolagents crashes
+  "pydantic-ai-slim[anthropic]>=2.9",
+]
 dev = ["pytest>=8.3", "ruff>=0.8", "mypy>=1.13"]
 
 [project.scripts]

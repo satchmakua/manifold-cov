@@ -1,0 +1,22 @@
+﻿
+Manifold · 20 scenarios x 3 repeats · random · agent=claude.search
+                            Coverage — 34% overall                             
+┌─────────────────┬───────────┬─────────────────┬─────────────────────────────┐
+│ group           │ hit/total │               % │ holes                       │
+├─────────────────┼───────────┼─────────────────┼─────────────────────────────┤
+│ n_tool_calls    │       3/5 │  ██████░░░░ 60% │ 4-8, 9+                     │
+│ terminal_reason │       1/5 │  ██░░░░░░░░ 20% │ budget_steps, budget_cost,  │
+│                 │           │                 │ timeout, error              │
+│ fault_seen      │       4/5 │  ████████░░ 80% │ error                       │
+│ tool_called     │       1/1 │ ██████████ 100% │ —                           │
+│ tool_fsm        │       4/6 │  ███████░░░ 67% │ search:err->search:err,     │
+│                 │           │                 │ search:err->search:ok       │
+│ reason_x_ncalls │      3/25 │  █░░░░░░░░░ 12% │ completed x 4-8, completed  │
+│                 │           │                 │ x 9+, budget_steps x 0,     │
+│                 │           │                 │ budget_steps x 1,           │
+│                 │           │                 │ budget_steps x 2-3, +17     │
+│                 │           │                 │ more                        │
+└─────────────────┴───────────┴─────────────────┴─────────────────────────────┘
+
+Seeds fully passing every invariant: 20/20
+All scenarios satisfied every invariant.

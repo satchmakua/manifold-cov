@@ -154,3 +154,46 @@ coverage %, the holes, the bugs found, and a one-line `manifold repro <seed>` fo
   raw count) with the reachability / projection / curve suites + the H2 live-wiring/guard tests + the
   H3 adapter-bridge suite. *Accept met:* at/above the ~0.5 goal by raw LOC (figure stated so the
   reader can recompute); the M4 shrinker will add more. _(shipped 2026-07-10)_
+
+---
+
+## Post-v1 — the hunt (added 2026-07-13)
+
+> A second engineer's critique, after v1 shipped, landed one core objection: **every bug Manifold
+> has caught was planted by its author** — the live model turned out robust, so the headline claim
+> rests on captive prey. Its ranked fixes become these items. Standing rule unchanged: honest
+> outcomes only — if the animals are healthy, the artifact says so.
+
+- [x] **W1 — Grow the invariant library (2 → 6).** `no_agent_crash` (an `error` terminal previously
+  failed *no* invariant — a crashed trace printed PASS/PASS), `no_empty_output`,
+  `garbage_not_parroted` (corrupted tool data piped verbatim into the final answer), and
+  `no_duplicate_identical_calls` (non-consecutive A-B-A-B loops that the consecutive-retry check
+  misses); `starter_library()` returns all six. `no_agent_crash` joins the CLI defaults; the rest
+  are opt-in per spec (retrofitting would silently change committed artifacts). *Accept met:* 11
+  unit tests (positive + negative each); the W3 hunt ran the full library, and
+  `no_duplicate_identical_calls` caught a real wild loop (identical `fetch` call issued 5×).
+  _(shipped 2026-07-13)_
+- [x] **W2 — Parallel scenario execution.** `sweep(..., parallel=N)` + `manifold run --parallel N`:
+  thread-pool execution with **order-preserving merge**, so results are *identical* to sequential
+  (tested — coverage DB, failures, per-seed flags, and trajectory all equal; overlap proven with a
+  blocking agent), random mode parallelizes across scenarios, directed mode across repeats only
+  (seed selection is feedback-driven — sequential by design). *Accept met:* identity tests green;
+  the W4 live campaign ran with `--parallel 6`. _(shipped 2026-07-13)_
+- [x] **W3 — Hunt wild prey.** Adapted **three** open-source frameworks (LangGraph, smolagents,
+  pydantic-ai — `examples/wild_agents.py`, `[wild]` extra), tools bound to Manifold's env,
+  frameworks' own defaults kept, swept live (15 × 2 repeats each, `--parallel 4`, full 6-check
+  library). *Result:* **LangGraph 15/15 and pydantic-ai 15/15 healthy; smolagents 9/15** — the
+  first bugs caught in an agent we didn't write: a **5× consecutive retry storm** on a dead tool
+  (`no_infinite_retry`, committed live trace `examples/recorded/wild_smolagents_retry.jsonl`), an
+  **identical call issued 5×** (`no_duplicate_identical_calls`), four budget burns, three flaky
+  seeds (real `pass^k`). Root cause is the framework-model interaction (smolagents' retry coaching
+  + `tool_choice='required'`) — the same model is graceful in the other three harnesses. Artifacts:
+  `docs/wild_hunt.txt`, `docs/wild_shrink.txt` (shrink returned −0%: the generated scenario was
+  already near-minimal; flaky-oracle conservatism noted). An earlier campaign was invalidated by a
+  broken litellm install (missing `fastapi`) and re-run — infra failures were not reported as
+  findings. _(shipped 2026-07-13)_
+- [x] **W4 — The live flakiness campaign.** Ran 20 scenarios × 3 repeats (60 live runs, `--parallel
+  6`) on live `claude-haiku-4-5`. *Result, honestly:* **pass^k = 60/60 — zero flaky seeds**; the
+  real model is highly consistent on this scenario space (at API-default temperature). The
+  flakiness machinery is now exercised on a real model — it found none to report, and says so.
+  Artifact: `docs/flakiness_campaign.txt`. _(shipped 2026-07-13)_

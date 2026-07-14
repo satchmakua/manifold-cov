@@ -1,0 +1,54 @@
+﻿Wild-bug shrink (seed 7, wild.smolagents, live, --repeats 2). litellm stderr banners trimmed.
+Honest result: -0% — the generated scenario was already near-minimal (2 tools, 2 faults), and
+with a flaky bug (fires ~1/2 runs) the repeats=2 oracle is conservative by design.
+
+Shrink · seed=0x7 · agent=wild.smolagents · preserving no_infinite_retry
+
+ORIGINAL (size 7):
+mocks: search=error@-1, fetch=error@0
+  budgets: steps=12 cost=100 wall_ms=30000
+  task: 'latest CPI figure'
+
+MINIMAL (size 7, -0%, 17 evals):
+mocks: search=error@-1, fetch=error@0
+  budgets: steps=12 cost=100 wall_ms=30000
+  task: 'latest CPI figure'
+
+Minimal reproducer (Scenario JSON — replays this bug exactly):
+{
+  "seed": 7,
+  "task": "latest CPI figure",
+  "mocks": [
+    {
+      "tool": "search",
+      "responses": [
+        "search-result-A"
+      ],
+      "faults": [
+        {
+          "at_call": -1,
+          "kind": "error",
+          "detail": null
+        }
+      ]
+    },
+    {
+      "tool": "fetch",
+      "responses": [
+        "fetch-result-A"
+      ],
+      "faults": [
+        {
+          "at_call": 0,
+          "kind": "error",
+          "detail": null
+        }
+      ]
+    }
+  ],
+  "budgets": {
+    "max_steps": 12,
+    "max_cost": 100.0,
+    "wall_ms": 30000
+  }
+}

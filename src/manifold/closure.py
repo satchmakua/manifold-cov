@@ -11,6 +11,15 @@ draws a candidate pool of seeds, cheaply samples each (no agent run), and picks 
 whose scenario best fills current holes — favouring fault kinds whose ``fault_seen`` bin
 is still empty, and under-used inputs generally. Seeds stay pure reproduction handles;
 ``manifold repro <seed>`` reproduces exactly. Must beat uniform random on the examples.
+
+**Parallel execution** (post-v1, W2): ``parallel=N`` runs agent executions on a thread
+pool, but results are **merged in submission order**, so a parallel sweep produces
+*identical* results (coverage, failures, trajectory) to a sequential one — throughput
+changes, determinism doesn't (ADR-0002). Random mode parallelizes across scenarios;
+directed mode only across repeats-per-seed, because seed *selection* is feedback-driven
+(each pick depends on accumulated coverage) and is inherently sequential. Requires the
+agent to tolerate concurrent ``run()`` calls (a live API client is; a toy with shared
+mutable state may not be).
 """
 
 from __future__ import annotations
@@ -18,6 +27,7 @@ from __future__ import annotations
 import random
 from collections import Counter
 from collections.abc import Callable
+from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass, field
 
 from manifold.agent import Agent
@@ -26,6 +36,7 @@ from manifold.harness import run
 from manifold.invariants import Invariant, Violation
 from manifold.model import CoverageModel
 from manifold.scenario import Scenario
+from manifold.trace import Trace
 
 
 @dataclass
@@ -116,6 +127,7 @@ def sweep(
     repeats: int = 1,
     coverage_directed: bool = False,
     candidates: int = 8,
+    parallel: int = 1,
 ) -> SweepResult:
     db = CoverageDB()
     failures: dict[tuple[str, int], Violation] = {}
@@ -124,22 +136,53 @@ def sweep(
     seen = _SeenFeatures()
     meta = random.Random(base_seed)
 
-    for i in range(scenarios):
-        if coverage_directed:
-            seed = _select_seed(build_scenario, meta, seen, model, db, candidates)
-        else:
-            seed = base_seed + i
-        scenario = build_scenario(seed)
-        for k in range(repeats):
-            trace = run(agent, scenario, repeat=k)
+    def absorb(seed: int, traces: list[Trace]) -> None:
+        """Fold one scenario's repeat-traces into the accumulators — always called in
+        submission order, so parallel and sequential sweeps produce identical results."""
+        nonlocal db
+        for trace in traces:
             db = db.merge(evaluate(trace, model))
             violations = [v for inv in invariants if (v := inv(trace)) is not None]
             results.setdefault(seed, []).append(not violations)
             for v in violations:
                 failures.setdefault((v.invariant, seed), v)
-        if coverage_directed:
-            seen.update(scenario)
         trajectory.append(db.pct())
+
+    if not coverage_directed and parallel > 1:
+        # Random mode: seeds are fixed up front, so every run can be submitted at once;
+        # results are consumed in submission order regardless of completion order.
+        seeds = [base_seed + i for i in range(scenarios)]
+        scns = [build_scenario(s) for s in seeds]
+        pool = ThreadPoolExecutor(max_workers=parallel)
+        try:
+            futures: list[list[Future[Trace]]] = [
+                [pool.submit(run, agent, scn, k) for k in range(repeats)] for scn in scns
+            ]
+            for seed, futs in zip(seeds, futures, strict=True):
+                absorb(seed, [f.result() for f in futs])
+        finally:
+            # On an error or Ctrl-C, cancel still-queued runs instead of draining the whole
+            # queue (which, live, is real API spend). In-flight runs still finish.
+            pool.shutdown(wait=True, cancel_futures=True)
+    else:
+        for i in range(scenarios):
+            if coverage_directed:
+                seed = _select_seed(build_scenario, meta, seen, model, db, candidates)
+            else:
+                seed = base_seed + i
+            scenario = build_scenario(seed)
+            if parallel > 1 and repeats > 1:  # directed: parallelize the repeats only
+                pool = ThreadPoolExecutor(max_workers=min(parallel, repeats))
+                try:
+                    futs = [pool.submit(run, agent, scenario, k) for k in range(repeats)]
+                    traces = [f.result() for f in futs]
+                finally:
+                    pool.shutdown(wait=True, cancel_futures=True)
+            else:
+                traces = [run(agent, scenario, repeat=k) for k in range(repeats)]
+            absorb(seed, traces)
+            if coverage_directed:
+                seen.update(scenario)
 
     return SweepResult(
         db=db, failures=list(failures.values()), results_by_seed=results, trajectory=trajectory

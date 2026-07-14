@@ -53,6 +53,12 @@ def sdk() -> ModuleType:
 
 
 @pytest.fixture(scope="session")
+def wild() -> ModuleType:
+    # The wild-framework adapters (lazy framework imports; offline tests inject fakes).
+    return _load("wild_agents")
+
+
+@pytest.fixture(scope="session")
 def error_seed(toy: ModuleType) -> int:
     """A seed whose scenario injects a persistent `search` outage."""
     for s in range(500):

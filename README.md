@@ -34,6 +34,43 @@ manifold curve examples/research_agent.py --agent research.pipeline --svg docs/c
 That is the whole thesis in one picture: *targeting what you haven't tested finds the gaps
 faster than testing at random.*
 
+## The catch — a real bug, in an agent we didn't write
+
+Three agents built on **third-party frameworks** — LangGraph's prebuilt ReAct agent,
+HuggingFace smolagents' `ToolCallingAgent`, and pydantic-ai's `Agent` — same live model
+(`claude-haiku-4-5`), same tasks, same fault space, judged by the full 6-check invariant
+library. 15 scenarios × 2 repeats each ([full output](docs/wild_hunt.txt)):
+
+| Framework | Verdict | Coverage |
+|---|---|---|
+| LangGraph | **15/15 pass** — recovers from every injected fault | 64% |
+| pydantic-ai | **15/15 pass** — gives up cleanly, answers from knowledge | 64% |
+| smolagents | **9/15 — six seeds fail, three flaky** | 84% |
+
+On seed `0x7` (persistent `search` outage), the smolagents agent **retried the dead tool
+5× consecutively — rephrasing the query each time — and burned its entire 12-step budget**
+(`no_infinite_retry` + `terminates_within_budget` both fail; the committed live trace is
+[`examples/recorded/wild_smolagents_retry.jsonl`](examples/recorded/wild_smolagents_retry.jsonl)).
+Another seed caught the model issuing the **identical `fetch` call 5×** — the
+non-consecutive loop the new `no_duplicate_identical_calls` check exists for.
+
+The comparative result is the finding: **the same model that gives up gracefully after ~2
+retries in LangGraph, pydantic-ai, and a raw `anthropic` loop retry-storms inside
+smolagents** — whose design feeds every tool error back with *"Now let's retry: take care
+not to repeat previous errors!"* and forces a tool call on every step
+(`tool_choice='required'`). That interaction, not any code we planted, produces the
+failures — and it's flaky (~1/2 runs), which is exactly what the `pass^k` repeats machinery
+is for. Reproduce: `manifold repro 7 examples/wild_agents.py --agent wild.smolagents`
+(live key needed; run it a couple of times — flakiness is the point).
+
+*Is the comparison fair?* Each adapter keeps its framework's own error-handling / retry /
+step defaults, surfaces `ToolError` through that framework's intended seam, and runs the
+identical scenario space. LangGraph and pydantic-ai get a neutral system prompt (silent on
+error-handling); smolagents keeps its **own** default prompt on purpose — that default *is*
+the retry coaching under study. The controlled pair is LangGraph vs smolagents (both
+unlimited-retry, errors-as-observations, same tasks), which isolates smolagents' defaults as
+the cause. An adversarial review of the adapters confirmed the setup is apples-to-apples.
+
 **Status:** **M0–M3 shipped + review-driven hardening (H0–H5).** Manifold generates
 seeded constrained-random scenarios with fault injection, measures functional coverage of
 the behavior space (HTML heatmap), biases generation toward holes (`--coverage-directed`,
@@ -50,8 +87,12 @@ model run. Also done: no Windows-console crash (H0), every declared coverpoint r
 `claude-agent-sdk` agent unmodified** — the SDK's own agent loop, its tool calls routed
 through Manifold's mocked env via an in-process MCP server (H3). **M4 complete:** a delta-debug
 **shrinker** (`manifold shrink`) reduces a failing scenario to its minimal reproducer (below).
-See [ROADMAP.md](ROADMAP.md). The **Honest limits** section below
-says what it can't do.
+**Post-v1 review pass:** the invariant library grew to **6 generic checks**, sweeps run
+**parallel** (`--parallel N`, identical results to sequential — tested), a **60-run live
+flakiness campaign** measured `pass^k` on the real model (zero flaky seeds — it's remarkably
+consistent), and the **wild-framework hunt** above produced the first bug caught in an agent
+we didn't write. See [ROADMAP.md](ROADMAP.md). The **Honest
+limits** section below says what it can't do.
 
 ---
 
@@ -137,11 +178,19 @@ budget — leaving the one persistent `summarize` fault the agent retries to dea
 smallest budget that still shows ≥4 retries. The minimal `Scenario` (printed as JSON) replays
 the bug exactly. `manifold run … --shrink` does this inline for the first failure it finds.
 
+And run **the hunt** yourself — the three wild-framework agents (needs `ANTHROPIC_API_KEY` +
+`pip install "manifold-cov[wild]"`):
+
+```bash
+manifold run examples/wild_agents.py --agent wild.smolagents --scenarios 15 --repeats 2 --parallel 4
+# also: --agent wild.langgraph | --agent wild.pydantic_ai
+```
+
 ### Commands
 
 | Command | What it does |
 |---|---|
-| `manifold run <file> [--spec S] [--agent NAME] [--scenarios N] [--seed S] [--repeats K] [--coverage-directed] [--html PATH]` | Sweep N seeded scenarios (×K repeats); report coverage % + holes, flaky seeds, and invariant failures with a repro for each. |
+| `manifold run <file> [--spec S] [--agent NAME] [--scenarios N] [--seed S] [--repeats K] [--coverage-directed] [--parallel N] [--shrink] [--html PATH]` | Sweep N seeded scenarios (×K repeats, optionally N concurrent — identical results); report coverage % + holes, flaky seeds, and invariant failures with a repro for each. |
 | `manifold repro <seed> <file> [--spec S] [--agent NAME]` | Re-run one scenario by seed; print its full trace + verdict. |
 | `manifold curve <file> [--spec S] [--max-scenarios N] [--svg PATH]` | Sweep both modes and chart coverage vs scenarios (directed vs random) — writes a self-contained SVG. |
 | `manifold shrink <seed> <file> [--spec S] [--agent NAME] [--repeats K]` | Delta-debug a failing seed's scenario to a minimal still-failing reproducer (before/after + JSON). |
@@ -168,12 +217,19 @@ a spec module exposes `MODEL: CoverageModel` and `INVARIANTS` — see
   space (the multi-tool `research` agent) and marginal on a tiny one (a single-tool agent) —
   and it only steers toward coverpoints that declare a `project` hook; behaviour a coverpoint
   can't predict from inputs, both modes reach only by sampling more.
-- **Manifold found no bug in the real Claude agent — and says so.** The live sweep of
-  `claude-haiku-4-5` passed 10/10 scenarios: the model gives up after ~2 retries and answers
-  gracefully, so the planted retry-forever bug *does not exist* in the real model (the bug
-  demos are the toy/stubborn agents plus the scripted worst-case client). What the live run
-  *does* show is 36% coverage — the passing verdict spans only a third of the declared
-  behavior space, and the named holes are the honest caveat on "it passed."
+- **The raw Claude agent is healthy, and Manifold says so.** The live sweeps of a bare
+  `claude-haiku-4-5` tool-use loop passed 10/10 (36% coverage) and a 60-run flakiness
+  campaign passed 60/60 with **zero flaky seeds** — the model itself gives up after ~2
+  retries and answers gracefully. The wild catch above is a *framework-interaction* bug:
+  smolagents' retry coaching + forced tool calls push the same model into the storm. Its
+  maintainers might call that a design tradeoff — the honest claim is that the behavior
+  differs 3× across frameworks for identical faults, and Manifold measured it.
+- **The catch is one framework, and it's flaky.** Six failing seeds of fifteen, three of
+  them 1/2 across repeats (that flakiness is real signal, not noise — it's what `pass^k`
+  exists for). LangGraph and pydantic-ai came back healthy: two of three animals were fine,
+  and the artifact says so. Shrinking the wild bug returned **−0%** — the generated scenario
+  was already near-minimal, and a flaky-bug oracle at `--repeats 2` is conservative by
+  design ([docs/wild_shrink.txt](docs/wild_shrink.txt)).
 - **The shrinker is greedy, not provably minimal.** `manifold shrink` delta-debugs a failing
   scenario to a small, verified-still-failing reproducer — not a proof of the globally smallest
   one. It re-runs the agent per candidate (the eval count is printed), so shrinking a live/expensive
