@@ -1,4 +1,4 @@
-﻿THE HUNT - three wild frameworks, live claude-haiku-4-5, 15 scenarios x 2 repeats each, full 6-invariant library
+﻿THE HUNT (7-invariant library incl. no_unhedged_answer_on_tool_failure) - live claude-haiku-4-5, 15 scenarios x 2 repeats each
 
 =============== wild.langgraph ===============
 
@@ -9,7 +9,8 @@ Manifold · 15 scenarios x 2 repeats · random · agent=wild.langgraph
 ├─────────────────┼───────────┼─────────────────┼─────────────────────────────┤
 │ tool_called     │       2/2 │ ██████████ 100% │ —                           │
 │ fault_seen      │       5/5 │ ██████████ 100% │ —                           │
-│ fault_by_tool   │       5/8 │  ██████░░░░ 62% │ fetch:error, fetch:timeout, │
+│ fault_by_tool   │       5/8 │  ██████░░░░ 62% │ fetch:timeout,              │
+│                 │           │                 │ fetch:garbage,              │
 │                 │           │                 │ fetch:latency               │
 │ n_tool_calls    │       3/5 │  ██████░░░░ 60% │ 4-8, 9+                     │
 │ terminal_reason │       1/5 │  ██░░░░░░░░ 20% │ budget_steps, budget_cost,  │
@@ -34,19 +35,21 @@ Manifold · 15 scenarios x 2 repeats · random · agent=wild.smolagents
 │ terminal_reason │       2/5 │  ████░░░░░░ 40% │ budget_cost, timeout, error │
 └─────────────────┴───────────┴─────────────────┴─────────────────────────────┘
 
-Seeds fully passing every invariant: 9/15
-            Flaky seeds (3) — pass on some repeats, fail on others             
+Seeds fully passing every invariant: 11/15
+            Flaky seeds (4) — pass on some repeats, fail on others             
 ┌──────┬────────┬─────────────────────────────────────────────────────────────┐
 │ seed │ passed │ repro                                                       │
 ├──────┼────────┼─────────────────────────────────────────────────────────────┤
+│ 0x0  │    1/2 │ manifold repro 0 examples/wild_agents.py --agent            │
+│      │        │ wild.smolagents                                             │
 │ 0x7  │    1/2 │ manifold repro 7 examples/wild_agents.py --agent            │
+│      │        │ wild.smolagents                                             │
+│ 0xc  │    1/2 │ manifold repro 12 examples/wild_agents.py --agent           │
 │      │        │ wild.smolagents                                             │
 │ 0xd  │    1/2 │ manifold repro 13 examples/wild_agents.py --agent           │
 │      │        │ wild.smolagents                                             │
-│ 0xe  │    1/2 │ manifold repro 14 examples/wild_agents.py --agent           │
-│      │        │ wild.smolagents                                             │
 └──────┴────────┴─────────────────────────────────────────────────────────────┘
-                                 Failures (7)                                  
+                                 Failures (5)                                  
 ┌──────────────────────────────┬──────┬───────────────────────────────────────┐
 │ invariant                    │ seed │ detail                                │
 ├──────────────────────────────┼──────┼───────────────────────────────────────┤
@@ -54,16 +57,12 @@ Seeds fully passing every invariant: 9/15
 │                              │      │ after 6 steps                         │
 │ terminates_within_budget     │ 0x7  │ run ended with reason=budget_steps    │
 │                              │      │ after 12 steps                        │
-│ no_infinite_retry            │ 0x7  │ tool 'search' retried 4x              │
+│ no_infinite_retry            │ 0x7  │ tool 'search' retried 5x              │
 │                              │      │ consecutively after failures          │
-│ terminates_within_budget     │ 0x9  │ run ended with reason=budget_steps    │
-│                              │      │ after 6 steps                         │
 │ terminates_within_budget     │ 0xc  │ run ended with reason=budget_steps    │
 │                              │      │ after 6 steps                         │
 │ no_duplicate_identical_calls │ 0xd  │ identical call fetch({"url":          │
-│                              │      │ "search-result-B"}) issued 5x (max 3) │
-│ terminates_within_budget     │ 0xe  │ run ended with reason=budget_steps    │
-│                              │      │ after 6 steps                         │
+│                              │      │ "search-result-B"}) issued 4x (max 3) │
 └──────────────────────────────┴──────┴───────────────────────────────────────┘
 
 Reproduce: manifold repro 0 examples/wild_agents.py --agent wild.smolagents
@@ -72,14 +71,13 @@ exit=1 for wild.smolagents
 =============== wild.pydantic_ai ===============
 
 Manifold · 15 scenarios x 2 repeats · random · agent=wild.pydantic_ai
-                            Coverage — 64% overall                             
+                            Coverage — 72% overall                             
 ┌─────────────────┬───────────┬─────────────────┬─────────────────────────────┐
 │ group           │ hit/total │               % │ holes                       │
 ├─────────────────┼───────────┼─────────────────┼─────────────────────────────┤
 │ tool_called     │       2/2 │ ██████████ 100% │ —                           │
 │ fault_seen      │       5/5 │ ██████████ 100% │ —                           │
-│ fault_by_tool   │       5/8 │  ██████░░░░ 62% │ fetch:error, fetch:timeout, │
-│                 │           │                 │ fetch:latency               │
+│ fault_by_tool   │       7/8 │  █████████░ 88% │ fetch:latency               │
 │ n_tool_calls    │       3/5 │  ██████░░░░ 60% │ 4-8, 9+                     │
 │ terminal_reason │       1/5 │  ██░░░░░░░░ 20% │ budget_steps, budget_cost,  │
 │                 │           │                 │ timeout, error              │

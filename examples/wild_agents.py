@@ -4,7 +4,7 @@ Every bug Manifold caught before this module lived in an agent its author wrote 
 buggy. These three adapters point it at agent loops **other people** wrote — LangGraph's
 prebuilt ReAct agent, HuggingFace smolagents' ``ToolCallingAgent``, and pydantic-ai's
 ``Agent`` — with tools bound to Manifold's ``env`` and each framework's error-handling /
-retry / step defaults left intact. The full six-check invariant library judges the traces.
+retry / step defaults left intact. The full seven-check invariant library judges the traces.
 The standing rule: honest outcomes only — if the animals are healthy, the artifact says so.
 
 **On fairness (disclosed).** All three surface an injected ``ToolError`` to the model as an

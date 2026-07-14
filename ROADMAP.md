@@ -164,15 +164,17 @@ coverage %, the holes, the bugs found, and a one-line `manifold repro <seed>` fo
 > rests on captive prey. Its ranked fixes become these items. Standing rule unchanged: honest
 > outcomes only — if the animals are healthy, the artifact says so.
 
-- [x] **W1 — Grow the invariant library (2 → 6).** `no_agent_crash` (an `error` terminal previously
+- [x] **W1 — Grow the invariant library (2 → 7).** `no_agent_crash` (an `error` terminal previously
   failed *no* invariant — a crashed trace printed PASS/PASS), `no_empty_output`,
-  `garbage_not_parroted` (corrupted tool data piped verbatim into the final answer), and
-  `no_duplicate_identical_calls` (non-consecutive A-B-A-B loops that the consecutive-retry check
-  misses); `starter_library()` returns all six. `no_agent_crash` joins the CLI defaults; the rest
-  are opt-in per spec (retrofitting would silently change committed artifacts). *Accept met:* 11
-  unit tests (positive + negative each); the W3 hunt ran the full library, and
-  `no_duplicate_identical_calls` caught a real wild loop (identical `fetch` call issued 5×).
-  _(shipped 2026-07-13)_
+  `garbage_not_parroted` (corrupted tool data piped verbatim into the final answer),
+  `no_duplicate_identical_calls` (non-consecutive A-B-A-B loops the consecutive-retry check misses),
+  and `no_unhedged_answer_on_tool_failure` (the critique's "never ignores a tool error in its final
+  answer" — a grounded agent that answers confidently when *every* tool call failed, without
+  acknowledging it); `starter_library()` returns all seven. `no_agent_crash` joins the CLI defaults;
+  the rest are opt-in per spec. The last two are *heuristic* (documented false-positive modes) and
+  cross-checked against the committed graceful fixtures. *Accept met:* 17 unit tests; the W3 hunt
+  ran the full library, and `no_duplicate_identical_calls` caught a real wild loop (identical `fetch`
+  call issued 5×). _(shipped 2026-07-13; extended 2026-07-14 with the seventh check)_
 - [x] **W2 — Parallel scenario execution.** `sweep(..., parallel=N)` + `manifold run --parallel N`:
   thread-pool execution with **order-preserving merge**, so results are *identical* to sequential
   (tested — coverage DB, failures, per-seed flags, and trajectory all equal; overlap proven with a
@@ -181,8 +183,9 @@ coverage %, the holes, the bugs found, and a one-line `manifold repro <seed>` fo
   the W4 live campaign ran with `--parallel 6`. _(shipped 2026-07-13)_
 - [x] **W3 — Hunt wild prey.** Adapted **three** open-source frameworks (LangGraph, smolagents,
   pydantic-ai — `examples/wild_agents.py`, `[wild]` extra), tools bound to Manifold's env,
-  frameworks' own defaults kept, swept live (15 × 2 repeats each, `--parallel 4`, full 6-check
-  library). *Result:* **LangGraph 15/15 and pydantic-ai 15/15 healthy; smolagents 9/15** — the
+  frameworks' own defaults kept, swept live (15 × 2 repeats each, `--parallel 4`, full 7-check
+  library). *Result:* **LangGraph 15/15 and pydantic-ai 15/15 healthy; smolagents fails ~4–6/15
+  (flaky, varies run-to-run — the pass^k signal)** — the
   first bugs caught in an agent we didn't write: a **5× consecutive retry storm** on a dead tool
   (`no_infinite_retry`, committed live trace `examples/recorded/wild_smolagents_retry.jsonl`), an
   **identical call issued 5×** (`no_duplicate_identical_calls`), four budget burns, three flaky

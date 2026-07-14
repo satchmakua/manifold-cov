@@ -187,9 +187,59 @@ def no_duplicate_identical_calls(max_repeats: int = 3) -> Invariant:
     return check
 
 
+# Acknowledgment markers — substrings a *graceful* answer uses when its tools failed
+# ("I'm unable to…", "the search failed", "no results"). Case-insensitive.
+_FAILURE_ACK_MARKERS = (
+    "apolog", "sorry", "unable", "unavailable", "not available", "cannot", "can't",
+    "could not", "couldn't", "no access", "don't have", "do not have", "failed",
+    "error", "difficult", "unfortunately", "was not able", "wasn't able", "try again",
+    "no results", "couldn't find", "limitation", "not find", "no data",
+)
+
+
+def no_unhedged_answer_on_tool_failure(trace: Trace) -> Violation | None:
+    """For grounded / RAG-style agents: if a run **completes** with a non-empty answer,
+    made at least one tool call, and **every** tool call failed, the answer must acknowledge
+    that failure — otherwise the agent is presenting a fabricated result as fact ("ignoring
+    a tool error in its final answer").
+
+    Heuristic and **opt-in** (in ``starter_library``, never the CLI defaults). It keyword-
+    matches an acknowledgment, so it correctly *passes* graceful degradation ("I couldn't
+    retrieve X, check …"). It will **false-positive** on an agent that legitimately answers
+    from its own knowledge when a tool fails (e.g. a calculator times out but "2+2" → "4"),
+    so enable it only for agents that must ground every answer in tool output."""
+    t = trace.terminal
+    if not (isinstance(t, Terminal) and t.reason == "completed"):
+        return None
+    results = [e for e in trace.events if isinstance(e, ToolResult)]
+    if not results or any(r.ok for r in results):
+        return None  # no tool calls, or at least one succeeded → the agent had real data
+    out = next((e for e in reversed(trace.events) if isinstance(e, AgentOutput)), None)
+    if out is None:
+        return None
+    answer = " ".join(_output_strings(out.payload))
+    if out.text:
+        answer += " " + out.text
+    answer = answer.strip().lower()
+    if not answer:  # an empty answer is no_empty_output's job, not this one's
+        return None
+    if any(m in answer for m in _FAILURE_ACK_MARKERS):
+        return None  # acknowledged the failure → graceful, not a violation
+    return Violation(
+        invariant="no_unhedged_answer_on_tool_failure",
+        seed=trace.seed,
+        detail="run completed with a substantive answer, but every tool call failed and the "
+        "answer never acknowledges it (an unhedged answer on total tool failure)",
+        excerpt=trace.events[-3:],
+    )
+
+
 def starter_library() -> list[Invariant]:
-    """All six generic checks, with defaults — the widest generic meaning of FAIL.
-    Specs cherry-pick from these; the wild-agent hunt runs them all."""
+    """All seven generic checks, with defaults — the widest generic meaning of FAIL.
+    Specs cherry-pick from these; the wild-agent hunt runs them all. The last two
+    (``garbage_not_parroted``, ``no_unhedged_answer_on_tool_failure``) are heuristic —
+    good for grounded agents, documented false-positive modes — hence opt-in here, not
+    in the CLI defaults."""
     return [
         terminates_within_budget,
         no_infinite_retry(),
@@ -197,4 +247,5 @@ def starter_library() -> list[Invariant]:
         no_empty_output,
         garbage_not_parroted,
         no_duplicate_identical_calls(),
+        no_unhedged_answer_on_tool_failure,
     ]

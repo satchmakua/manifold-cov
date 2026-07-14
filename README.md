@@ -38,21 +38,32 @@ faster than testing at random.*
 
 Three agents built on **third-party frameworks** — LangGraph's prebuilt ReAct agent,
 HuggingFace smolagents' `ToolCallingAgent`, and pydantic-ai's `Agent` — same live model
-(`claude-haiku-4-5`), same tasks, same fault space, judged by the full 6-check invariant
+(`claude-haiku-4-5`), same tasks, same fault space, judged by the full 7-check invariant
 library. 15 scenarios × 2 repeats each ([full output](docs/wild_hunt.txt)):
 
 | Framework | Verdict | Coverage |
 |---|---|---|
 | LangGraph | **15/15 pass** — recovers from every injected fault | 64% |
-| pydantic-ai | **15/15 pass** — gives up cleanly, answers from knowledge | 64% |
-| smolagents | **9/15 — six seeds fail, three flaky** | 84% |
+| pydantic-ai | **15/15 pass** — gives up cleanly, answers from knowledge | ~70% |
+| smolagents | **fails ~4–6 of 15 (several flaky)** | 84% |
 
-On seed `0x7` (persistent `search` outage), the smolagents agent **retried the dead tool
-5× consecutively — rephrasing the query each time — and burned its entire 12-step budget**
-(`no_infinite_retry` + `terminates_within_budget` both fail; the committed live trace is
+LangGraph and pydantic-ai pass every seed on every run; smolagents fails a handful — and the
+exact set shifts run to run (this is a live, nondeterministic model, so a few seeds land
+1/2 across repeats). **That variance is not noise — it's the `pass^k` signal**, the thing
+the flakiness machinery exists to surface. On seed `0x7` (persistent `search` outage) the
+smolagents agent **retried the dead tool 5× consecutively — rephrasing the query each time —
+and burned its entire 12-step budget** (`no_infinite_retry` + `terminates_within_budget`
+both fail; the committed live trace is
 [`examples/recorded/wild_smolagents_retry.jsonl`](examples/recorded/wild_smolagents_retry.jsonl)).
-Another seed caught the model issuing the **identical `fetch` call 5×** — the
-non-consecutive loop the new `no_duplicate_identical_calls` check exists for.
+Another seed caught the model issuing the **identical `fetch` call 4–5×** — the non-consecutive
+loop the `no_duplicate_identical_calls` check exists for.
+
+*(The seventh check, `no_unhedged_answer_on_tool_failure` — "never confidently answer when
+every tool failed, without acknowledging it" — did **not** fire in the hunt: these agents
+either grounded successfully, died on budget, or acknowledged their failures gracefully.
+It's a heuristic check for grounded/RAG agents that confabulate; the honest outcome here is
+that Haiku doesn't confabulate in these harnesses. Included because it closes the last
+concrete gap the review named, not because it caught something.)*
 
 The comparative result is the finding: **the same model that gives up gracefully after ~2
 retries in LangGraph, pydantic-ai, and a raw `anthropic` loop retry-storms inside

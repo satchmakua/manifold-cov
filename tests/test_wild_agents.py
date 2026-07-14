@@ -50,7 +50,7 @@ def _outage(max_steps: int = 10) -> Scenario:
 
 def test_module_exposes_the_contract(wild: ModuleType) -> None:
     assert set(wild.AGENTS) == {"wild.langgraph", "wild.smolagents", "wild.pydantic_ai"}
-    assert len(wild.INVARIANTS) == 6  # the full starter library judges the hunt
+    assert len(wild.INVARIANTS) == 7  # the full starter library judges the hunt
 
 
 # --- LangGraph -----------------------------------------------------------------

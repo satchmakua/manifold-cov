@@ -1,15 +1,19 @@
-"""W1: the grown invariant library (2 -> 6 generic checks). Each new check is tested
+"""W1: the grown invariant library (2 -> 7 generic checks). Each new check is tested
 positive (fires on the bug it names) and negative (silent on healthy traces) using
-hand-built traces — no agent runs needed, these are pure Trace predicates.
+hand-built traces — no agent runs needed, these are pure Trace predicates. The two
+heuristic checks are also cross-checked against the committed real graceful fixtures.
 """
 
 from __future__ import annotations
+
+from types import ModuleType
 
 from manifold.invariants import (
     garbage_not_parroted,
     no_agent_crash,
     no_duplicate_identical_calls,
     no_empty_output,
+    no_unhedged_answer_on_tool_failure,
     starter_library,
 )
 from manifold.trace import AgentError, AgentOutput, Event, Terminal, ToolCall, ToolResult, Trace
@@ -162,10 +166,76 @@ def test_duplicate_calls_survives_nonstring_nested_arg_keys() -> None:
     assert v is not None  # and still detects the 5x identical exotic-arg call
 
 
-def test_starter_library_has_six_named_checks() -> None:
+# --- no_unhedged_answer_on_tool_failure ---------------------------------------
+
+
+def _all_failed(answer: str) -> Trace:
+    # one tool call, it fails (ok=False), then the agent answers `answer`
+    return _trace(
+        [
+            _call(1),
+            ToolResult(step=1, tool="search", ok=False, fault="error"),
+            AgentOutput(step=1, text=answer, payload=answer),
+        ]
+    )
+
+
+def test_unhedged_answer_fires_when_all_tools_failed_and_no_acknowledgment() -> None:
+    # The bug: every tool failed, yet the agent states a confident specific result.
+    v = no_unhedged_answer_on_tool_failure(_all_failed("The latest CPI figure is 3.2 percent."))
+    assert v is not None
+    assert "unhedged" in v.detail
+
+
+def test_unhedged_answer_silent_on_graceful_degradation() -> None:
+    # The good case: it acknowledges the failure — must PASS.
+    for graceful in (
+        "I'm unable to retrieve the CPI right now; try the BLS website.",
+        "I apologize, the search tool failed. Please check bls.gov.",
+        "Sorry, I couldn't find that — no results were returned.",
+    ):
+        assert no_unhedged_answer_on_tool_failure(_all_failed(graceful)) is None
+
+
+def test_unhedged_answer_silent_when_a_tool_succeeded_or_none_were_called() -> None:
+    # Some real data -> not this check's concern.
+    ok = _trace(
+        [
+            _call(1),
+            ToolResult(step=1, tool="search", ok=True, value="sunny"),
+            AgentOutput(step=1, text="It is sunny."),
+        ]
+    )
+    assert no_unhedged_answer_on_tool_failure(ok) is None
+    # No tool calls at all (pure-knowledge answer) -> not flagged.
+    none_called = _trace([AgentOutput(step=1, text="Paris is the capital of France.")])
+    assert no_unhedged_answer_on_tool_failure(none_called) is None
+
+
+def test_unhedged_answer_silent_on_non_completed_runs() -> None:
+    assert no_unhedged_answer_on_tool_failure(_all_failed("anything")) is not None  # sanity
+    # a budget death is terminates_within_budget's job, not this one's
+    t = _trace(
+        [_call(1), ToolResult(step=1, tool="search", ok=False, fault="error")],
+        reason="budget_steps",
+    )
+    assert no_unhedged_answer_on_tool_failure(t) is None
+
+
+def test_committed_graceful_fixtures_pass_the_unhedged_check(
+    claude: ModuleType, sdk: ModuleType
+) -> None:
+    # Cross-check against the real recorded traces: both the H2 (anthropic) and H3 (SDK)
+    # graceful-recovery answers acknowledge the outage, so this heuristic must not flag them.
+    for mod in (claude, sdk):
+        trace = Trace.load_jsonl(mod.RECORDED)
+        assert no_unhedged_answer_on_tool_failure(trace) is None
+
+
+def test_starter_library_has_seven_named_checks() -> None:
     lib = starter_library()
     names = {getattr(inv, "__name__", "?") for inv in lib}
-    assert len(lib) == 6
+    assert len(lib) == 7
     assert names == {
         "terminates_within_budget",
         "no_infinite_retry",
@@ -173,6 +243,7 @@ def test_starter_library_has_six_named_checks() -> None:
         "no_empty_output",
         "garbage_not_parroted",
         "no_duplicate_identical_calls",
+        "no_unhedged_answer_on_tool_failure",
     }
 
 
