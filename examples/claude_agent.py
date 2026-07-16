@@ -43,6 +43,23 @@ from manifold.harness import ToolError
 from manifold.scenario import Budgets, Fault, Scenario, ToolMock
 
 MODEL = "claude-haiku-4-5"  # cheap + capable; the demo doesn't need a frontier model
+# claude-haiku-4-5 list price, USD per token (in / out) — the real cost of a real turn.
+_PRICE_IN, _PRICE_OUT = 1.0 / 1_000_000, 5.0 / 1_000_000
+
+
+def _charge_usage(env: ToolEnv, resp: Any) -> None:
+    """Bill the model turn's *real* token spend against the cost budget. The harness can't
+    see tokens (they're burned inside the agent's loop), so the adapter reports them —
+    `Budgets.max_cost` then means dollars, not a tool-call proxy. Silent when the
+    stand-in client reports no usage."""
+    usage = getattr(resp, "usage", None)
+    if usage is None:
+        return
+    tin = int(getattr(usage, "input_tokens", 0) or 0)
+    tout = int(getattr(usage, "output_tokens", 0) or 0)
+    charge = getattr(env, "charge", None)
+    if charge is not None and (tin or tout):
+        charge(tin * _PRICE_IN + tout * _PRICE_OUT, input_tokens=tin, output_tokens=tout)
 SYSTEM = "You are a research assistant. Use the search tool to answer the user's question."
 SEARCH_TOOL = {
     "name": "search",
@@ -93,6 +110,7 @@ class ClaudeSearchAgent:
                 tools=[SEARCH_TOOL],
                 messages=messages,
             )
+            _charge_usage(env, resp)  # real token spend -> the cost budget
             messages.append({"role": "assistant", "content": resp.content})
             tool_uses = [b for b in resp.content if getattr(b, "type", None) == "tool_use"]
 

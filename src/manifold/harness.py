@@ -73,6 +73,19 @@ class _RecordingEnv:
     def state(self, label: str, /, **data: Any) -> None:
         self.events.append(StateSnapshot(step=self.step, label=label, data=data))
 
+    def charge(self, amount: float, /, **data: Any) -> None:
+        """Bill real spend the harness can't observe (LLM tokens/dollars burned inside the
+        agent's loop) against the cost budget, and record it. Checked *after* charging, so
+        an agent that blows the budget on model spend alone is still stopped — the tool-call
+        meter can't see that."""
+        self.cost += float(amount)
+        self.events.append(
+            StateSnapshot(step=self.step, label="charge", data={"amount": amount, **data})
+        )
+        b = self._scn.budgets
+        if self.cost >= b.max_cost:
+            raise BudgetExceeded("budget_cost")
+
     def call(self, tool: str, /, **args: Any) -> Any:
         self._check_budget()
         self.step += 1

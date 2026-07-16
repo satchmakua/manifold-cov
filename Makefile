@@ -19,6 +19,7 @@ demo: check                   ## produce the flagship artifacts (heatmap + curve
 	manifold curve examples/research_agent.py --agent research.pipeline \
 		--max-scenarios 120 --svg docs/coverage_curve.svg
 	manifold shrink 1 examples/research_agent.py --agent research.stubborn | tee docs/shrink_example.txt
+	python examples/real_tools.py
 	python examples/claude_agent.py
 
 curve:                        ## just the directed-vs-random coverage curve

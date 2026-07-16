@@ -169,6 +169,21 @@ python examples/sdk_agent.py
 #   manifold run examples/sdk_agent.py --agent sdk.search --scenarios 2   # sweep the live SDK agent
 ```
 
+And see the **mocks that are recordings, not inventions** — `search`/`fetch` here really grep
+and really read real files, and the response pool is machine-recorded from that real execution.
+The drift check re-runs the live tools, so a stale recording fails CI rather than quietly
+becoming fiction (free, offline, no key):
+
+```bash
+python examples/real_tools.py            # verify the recording still matches the live tools
+python examples/real_tools.py --record   # re-record from the real tools
+manifold run examples/real_tools.py --agent real.corpus --scenarios 12 --coverage-directed
+```
+
+That sweep immediately flags `garbage_not_parroted`: the corpus agent interpolates tool output
+straight into its answer, so injected garbage reaches the user. Not a planted bug — just what
+the natural implementation does.
+
 And **shrink a failing scenario to its minimal reproducer** — delta-debugging finds the
 essential core of the bug ([full output](docs/shrink_example.txt)):
 
@@ -245,8 +260,21 @@ a spec module exposes `MODEL: CoverageModel` and `INVARIANTS` — see
   scenario to a small, verified-still-failing reproducer — not a proof of the globally smallest
   one. It re-runs the agent per candidate (the eval count is printed), so shrinking a live/expensive
   agent is metered; `manifold run` only shrinks on an explicit `--shrink`.
-- **No parallel scenario execution.** The sweep runs scenarios sequentially; a parallel executor was
-  a stretch-within-a-stretch and isn't built. Not a correctness limit, a throughput one.
+- **The mocks are a *checked recording* of a real tool — sampled, not exhaustive.** This used
+  to be the weakest claim here ("your mocks are strings you typed, so what does a pass mean?").
+  [`examples/real_tools.py`](examples/real_tools.py) answers it: `search`/`fetch` really grep and
+  really read real files, the response pool is **machine-recorded from that real execution**
+  ([tool_cassette.json](examples/recorded/tool_cassette.json)), and a **drift check re-runs the
+  live tools in CI** so a stale recording fails instead of quietly becoming fiction. What's left
+  is genuinely irreducible: a recording is a *sample* of a real tool's behavior space, and the
+  **faults stay models** (`error`/`timeout`/`garbage`/`latency`) — deliberate failure-mode
+  modelling, not emulation of an external system. Demonstrated on a local tool, where the drift
+  check runs free and offline; a remote API records the same way but needs the network to check.
+- **Cost is real only where an adapter reports it.** `Budgets.max_cost` meters a flat 1.0 per
+  tool call by default — a proxy. An adapter that calls `env.charge()` with real token usage
+  (the `anthropic` example does) turns it into dollars and lets the budget bound spend *between*
+  tool calls; adapters that don't still meter the proxy. ("Cost grows monotonically" is not a
+  check Manifold ships: a counter can't decrease, so it could never fail.)
 
 ## Project docs
 

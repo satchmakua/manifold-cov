@@ -1,0 +1,70 @@
+{
+  "recorded_at": "2026-07-14",
+  "source_digest": "b68967cfc80e",
+  "tools": {
+    "fetch": [
+      {
+        "args": {
+          "path": "coverage.md"
+        },
+        "response": "# Functional coverage\n\nFunctional coverage measures how much of a declared behavior space a test campaign has\nactually exercised. It is not code coverage: code coverage asks which lines ran, functional\ncoverage asks which *behaviors* were observed.\n\nA coverage model is declared, not inferred. The en"
+      },
+      {
+        "args": {
+          "path": "generation.md"
+        },
+        "response": "# Constrained-random generation\n\nConstrained-random generation samples stimulus from a declared space under constraints,\nrather than enumerating hand-written cases. A seed resolves to a concrete scenario by a\npure function, so any run reproduces exactly from its seed.\n\nCoverage-directed generation b"
+      },
+      {
+        "args": {
+          "path": "reliability.md"
+        },
+        "response": "# Agent reliability\n\nAn agent is reliable when it behaves acceptably across the whole distribution of conditions\nit will meet, not merely on a benchmark's happy path.\n\nFlakiness is the gap between a single passing run and a dependable one. Running the same\nseed K times and reporting how many passed "
+      },
+      {
+        "args": {
+          "path": "nonexistent.md"
+        },
+        "response": "error: no such document 'nonexistent.md'"
+      }
+    ],
+    "search": [
+      {
+        "args": {
+          "query": "coverage"
+        },
+        "response": "coverage.md:1: # Functional coverage\ncoverage.md:3: Functional coverage measures how much of a declared behavior space a test campaign has\ncoverage.md:4: actually exercised. It is not code coverage: code coverage asks which lines ran, functional\ncoverage.md:5: coverage asks which *behaviors* were observed."
+      },
+      {
+        "args": {
+          "query": "retry"
+        },
+        "response": "reliability.md:10: The classic tool-using failure is the retry loop: a tool returns an error, the agent retries"
+      },
+      {
+        "args": {
+          "query": "delta debugging"
+        },
+        "response": "generation.md:16: Delta debugging reduces a failing case to a minimal one that still fails. The classic"
+      },
+      {
+        "args": {
+          "query": "budget"
+        },
+        "response": "reliability.md:11: it, the error persists, and the agent retries forever until some budget stops it. A robust\nreliability.md:15: Budgets bound the damage. A step budget caps tool calls, a cost budget caps spend, and a\nreliability.md:16: wall budget caps elapsed time. Budget enforcement must not be swallowable by the agent's own"
+      },
+      {
+        "args": {
+          "query": "flakiness"
+        },
+        "response": "reliability.md:6: Flakiness is the gap between a single passing run and a dependable one. Running the same"
+      },
+      {
+        "args": {
+          "query": "quantum tunnelling"
+        },
+        "response": "no results"
+      }
+    ]
+  }
+}

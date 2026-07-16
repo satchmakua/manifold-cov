@@ -195,6 +195,21 @@ coverage %, the holes, the bugs found, and a one-line `manifold repro <seed>` fo
   already near-minimal; flaky-oracle conservatism noted). An earlier campaign was invalidated by a
   broken litellm install (missing `fastapi`) and re-run — infra failures were not reported as
   findings. _(shipped 2026-07-13)_
+- [x] **W5 — Close the two limits the review called inherent.** *(a) Mocks vs. real tools.* Every
+  other example invents both the tool and its responses, so "are the mocks faithful?" was
+  unanswerable — nothing real was on the other side. `examples/real_tools.py` puts something real
+  there: `search`/`fetch` genuinely grep and read `examples/corpus/`, the `ToolSpec` response pool is
+  **recorded from that real execution** (`src/manifold/cassette.py`, committed at
+  `examples/recorded/tool_cassette.json`), and `drift()` **re-runs the live tools in CI** so a stale
+  recording fails the build. The recording captures real behavior, not just the happy path — a real
+  miss (`"no results"`) and a real error string. *Residual, honestly:* a recording is a **sample**,
+  and faults remain **models** not emulation. *(b) The cost model.* `env.charge()` lets an adapter
+  report real token/dollar spend (the `anthropic` example prices real `usage`), so `max_cost` means
+  money and **spend is bounded between tool calls** — previously an agent could burn unlimited model
+  turns around a single tool call and the budget never saw it. The review's literal "cost grows
+  monotonically" is **deliberately not built**: a counter cannot decrease, so it could never fail.
+  *Accept met:* 17 tests, incl. the drift check and its can-actually-fail proof; the cassette-backed
+  sweep immediately caught `garbage_not_parroted` in the corpus agent. _(shipped 2026-07-14)_
 - [x] **W4 — The live flakiness campaign.** Ran 20 scenarios × 3 repeats (60 live runs, `--parallel
   6`) on live `claude-haiku-4-5`. *Result, honestly:* **pass^k = 60/60 — zero flaky seeds**; the
   real model is highly consistent on this scenario space (at API-default temperature). The

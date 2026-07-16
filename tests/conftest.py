@@ -59,6 +59,12 @@ def wild() -> ModuleType:
 
 
 @pytest.fixture(scope="session")
+def real_tools() -> ModuleType:
+    # Real (local) tools + the cassette recorded from them; the drift check runs offline.
+    return _load("real_tools")
+
+
+@pytest.fixture(scope="session")
 def error_seed(toy: ModuleType) -> int:
     """A seed whose scenario injects a persistent `search` outage."""
     for s in range(500):

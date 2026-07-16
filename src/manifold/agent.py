@@ -27,6 +27,14 @@ class ToolEnv(Protocol):
         """Mark a decision point (e.g. "planning", "retrying"). Optional."""
         ...
 
+    def charge(self, amount: float, /, **data: Any) -> None:
+        """Report real spend the harness can't see — LLM tokens or dollars burned inside
+        the agent's own loop. Optional: an adapter calls this after each model turn (every
+        framework exposes usage), which turns ``Budgets.max_cost`` from a proxy that counts
+        tool calls into a real budget. Metered like a tool call, so it can raise
+        ``BudgetExceeded`` — spend is bounded even between tool calls."""
+        ...
+
 
 class Agent(Protocol):
     """The thing under test. Anything with an ``id`` and this ``run`` is an agent."""
