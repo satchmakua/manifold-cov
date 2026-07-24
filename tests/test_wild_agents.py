@@ -18,6 +18,8 @@ from __future__ import annotations
 from types import ModuleType
 from typing import Any
 
+import pytest
+
 from manifold.harness import run
 from manifold.invariants import no_agent_crash
 from manifold.scenario import Budgets, Fault, Scenario, ToolMock
@@ -71,6 +73,7 @@ def _lg_bind(fake: Any) -> Any:
 
 
 def test_langgraph_routes_tools_through_env(wild: ModuleType) -> None:
+    pytest.importorskip("langchain_core")  # skips when the [wild] extra isn't installed (CI)
     from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
     from langchain_core.messages import AIMessage
 
@@ -82,6 +85,7 @@ def test_langgraph_routes_tools_through_env(wild: ModuleType) -> None:
 
 
 def test_langgraph_tool_error_becomes_observation_not_crash(wild: ModuleType) -> None:
+    pytest.importorskip("langchain_core")  # skips when the [wild] extra isn't installed (CI)
     from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
     from langchain_core.messages import AIMessage
 
@@ -92,6 +96,8 @@ def test_langgraph_tool_error_becomes_observation_not_crash(wild: ModuleType) ->
 
 
 def test_budget_exceeded_crosses_langgraph(wild: ModuleType) -> None:
+    pytest.importorskip("langchain_core")  # skips when the [wild] extra isn't installed (CI)
+
     from collections.abc import Iterator
 
     from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
@@ -122,6 +128,7 @@ def test_budget_exceeded_crosses_langgraph(wild: ModuleType) -> None:
 
 
 def _smol_model(plan: list[tuple[str, dict[str, Any]]]) -> Any:
+    pytest.importorskip("smolagents")  # skips the caller when [wild] isn't installed
     from smolagents.models import (
         ChatMessage,
         ChatMessageToolCall,
@@ -175,6 +182,7 @@ def test_budget_exceeded_crosses_smolagents(wild: ModuleType) -> None:
 
 
 def _pai_model(stubborn: bool) -> Any:
+    pytest.importorskip("pydantic_ai")  # skips the caller when [wild] isn't installed
     from pydantic_ai.messages import ModelResponse, TextPart, ToolCallPart
     from pydantic_ai.models.function import FunctionModel
 
