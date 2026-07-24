@@ -60,3 +60,14 @@ python_version = "3.11"
 files = ["src", "tests"]
 plugins = ["pydantic.mypy"]
 strict = true
+
+# The optional [wild] agent frameworks are absent in CI (which installs only [dev]) and
+# ship no type stubs, so treat them as untyped. The wild tests drive them through their
+# own fake-model seams and skip at runtime when the extra isn't installed.
+[[tool.mypy.overrides]]
+module = [
+  "langchain_core.*",
+  "smolagents.*",
+  "pydantic_ai.*",
+]
+ignore_missing_imports = true

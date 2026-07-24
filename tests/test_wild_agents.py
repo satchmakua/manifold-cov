@@ -122,7 +122,7 @@ def test_budget_exceeded_crosses_langgraph(wild: ModuleType) -> None:
 
 
 def _smol_model(plan: list[tuple[str, dict[str, Any]]]) -> Any:
-    from smolagents.models import (  # type: ignore[import-untyped]
+    from smolagents.models import (
         ChatMessage,
         ChatMessageToolCall,
         ChatMessageToolCallFunction,
