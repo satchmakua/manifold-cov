@@ -11,4 +11,4 @@ Public surface stabilises as milestones land; for now the building blocks are:
 See DESIGN.md for the full picture.
 """
 
-__version__ = "0.0.1"
+__version__ = "0.0.3"
